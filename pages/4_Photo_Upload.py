@@ -16,6 +16,79 @@ st.set_page_config(page_title='OjasFuel — Photo Upload', page_icon='📷', lay
 init_session()
 inject_theme()
 
+# ── Page-level style overrides ────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Radio group — pill-style selector */
+[data-testid="stRadio"] > div {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.5rem !important;
+    flex-wrap: wrap !important;
+}
+[data-testid="stRadio"] label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    padding: 0.35rem 0.9rem !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--border) !important;
+    background: var(--bg-surface) !important;
+    cursor: pointer !important;
+    transition: all 0.22s ease !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary) !important;
+}
+[data-testid="stRadio"] label:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    background: var(--accent-dim) !important;
+}
+/* Active radio — glow pill */
+[data-testid="stRadio"] label:has(input:checked) {
+    border-color: var(--accent) !important;
+    background: var(--accent-dim) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 0 10px var(--accent-glow), 0 0 0 1px var(--border-accent) !important;
+    font-weight: 600 !important;
+}
+[data-testid="stRadio"] label input[type="radio"] {
+    accent-color: var(--accent) !important;
+}
+
+/* Alert boxes — sharper dark-theme look */
+[data-testid="stAlert"] {
+    border-radius: var(--radius-md) !important;
+    font-family: 'Inter', sans-serif !important;
+    backdrop-filter: blur(4px) !important;
+}
+[data-testid="stAlert"] svg {
+    color: inherit !important;
+    flex-shrink: 0 !important;
+}
+
+/* Title accent */
+[data-testid="stHeading"] h1 {
+    letter-spacing: 0.03em !important;
+    background: linear-gradient(135deg, var(--text-primary) 60%, var(--accent));
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+}
+
+/* Divider spacing */
+[data-testid="stDivider"] { margin: 1.75rem 0 !important; }
+
+/* iframe (scanner) container */
+[data-testid="stComponents"] iframe,
+iframe {
+    border-radius: var(--radius-lg) !important;
+    border: 1px solid var(--border) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ── Optional dependency checks ────────────────────────────────────────────────
 _pyzbar_ok = False
 _easyocr_ok = False
@@ -61,76 +134,247 @@ SCANNER_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { margin: 0; background: #0d0d1a; font-family: sans-serif; }
-  #scanner-container {
-    position: relative; width: 100%; max-width: 480px; margin: 0 auto;
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a0f;
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 12px 8px 16px;
+    color: #f0f0f5;
   }
-  video { width: 100%; border-radius: 12px; display: block; }
+
+  /* ── Viewfinder wrapper ── */
+  #scanner-container {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    aspect-ratio: 4 / 3;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #0d0d1a;
+    box-shadow: 0 0 40px rgba(0, 230, 118, 0.08), 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 16px;
+  }
+
   #overlay {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    border-radius: 16px;
+  }
+
+  /* ── Dark vignette around edges ── */
+  #vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center,
+      transparent 50%,
+      rgba(0,0,0,0.55) 100%);
+    pointer-events: none;
+    border-radius: 16px;
+  }
+
+  /* ── Viewfinder reticle: corner brackets ── */
+  #reticle {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56%; height: 56%;
     pointer-events: none;
   }
-  #status {
-    text-align: center; padding: 8px; color: #00d4ff;
-    font-size: 14px; min-height: 24px;
+  .corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: #00e676;
+    border-style: solid;
+    border-width: 0;
+    border-radius: 3px;
+    transition: opacity 0.3s ease;
   }
-  #result {
-    text-align: center; padding: 12px; color: #00ff9d;
-    font-size: 18px; font-weight: 600; letter-spacing: 0.05em;
-    display: none;
-  }
+  .corner.tl { top: 0; left: 0;  border-top-width: 3px; border-left-width: 3px;
+    box-shadow: -2px -2px 8px rgba(0,230,118,0.35); }
+  .corner.tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px;
+    box-shadow: 2px -2px 8px rgba(0,230,118,0.35); }
+  .corner.bl { bottom: 0; left: 0;  border-bottom-width: 3px; border-left-width: 3px;
+    box-shadow: -2px 2px 8px rgba(0,230,118,0.35); }
+  .corner.br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px;
+    box-shadow: 2px 2px 8px rgba(0,230,118,0.35); }
+
+  /* ── Scan line ── */
   .scan-line {
-    position: absolute; left: 10%; width: 80%; height: 2px;
-    background: linear-gradient(90deg, transparent, #00d4ff, transparent);
-    animation: scanMove 2s linear infinite;
-    top: 20%;
+    position: absolute;
+    left: 22%; width: 56%;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(0,212,255,0.5) 20%,
+      #00d4ff 50%,
+      rgba(0,212,255,0.5) 80%,
+      transparent 100%);
+    border-radius: 2px;
+    filter: blur(0.5px);
+    animation: scanMove 2.2s cubic-bezier(0.4,0,0.6,1) infinite;
+    box-shadow: 0 0 8px #00d4ff, 0 0 16px rgba(0,212,255,0.4);
+    pointer-events: none;
   }
   @keyframes scanMove {
-    0% { top: 20%; opacity: 1; }
-    100% { top: 80%; opacity: 0.3; }
+    0%   { top: 22%; opacity: 0; }
+    8%   { opacity: 1; }
+    92%  { opacity: 1; }
+    100% { top: 78%; opacity: 0; }
+  }
+
+  /* ── Status bar ── */
+  #status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+    width: 100%;
+    max-width: 460px;
+  }
+  #status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #00d4ff;
+    box-shadow: 0 0 6px #00d4ff;
+    flex-shrink: 0;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.75); }
+  }
+  #status {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: #a0a0c0;
+    transition: color 0.3s ease;
+  }
+  #status.active  { color: #00d4ff; }
+  #status.success { color: #00e676; }
+  #status.error   { color: #ff4d6d; }
+
+  /* ── Result card ── */
+  #result {
+    display: none;
+    margin-top: 16px;
+    width: 100%;
+    max-width: 460px;
+    background: rgba(0, 230, 118, 0.06);
+    border: 1px solid rgba(0, 230, 118, 0.35);
+    border-radius: 14px;
+    padding: 16px 20px;
+    text-align: center;
+    box-shadow: 0 0 24px rgba(0, 230, 118, 0.12), 0 0 48px rgba(0,230,118,0.06);
+    animation: resultIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  @keyframes resultIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  #result-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #00e676;
+    margin-bottom: 6px;
+    opacity: 0.75;
+  }
+  #result-code {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #00e676;
+    text-shadow: 0 0 12px rgba(0,230,118,0.5);
+    word-break: break-all;
   }
 </style>
 </head>
 <body>
+
 <div id="scanner-container">
   <video id="video" autoplay playsinline muted></video>
   <canvas id="overlay"></canvas>
+  <div id="vignette"></div>
+  <div id="reticle">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
   <div class="scan-line"></div>
 </div>
-<div id="status">Initializing camera...</div>
-<div id="result"></div>
+
+<div id="status-bar">
+  <div id="status-dot"></div>
+  <div id="status">Initializing camera...</div>
+</div>
+
+<div id="result">
+  <div id="result-label">Barcode Detected</div>
+  <div id="result-code"></div>
+</div>
+
 <script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
 <script>
 (async () => {
-  const video = document.getElementById('video');
+  const video  = document.getElementById('video');
   const status = document.getElementById('status');
+  const dot    = document.getElementById('status-dot');
   const result = document.getElementById('result');
+  const code   = document.getElementById('result-code');
   const codeReader = new ZXing.BrowserMultiFormatReader();
 
+  const setStatus = (text, cls) => {
+    status.textContent = text;
+    status.className = cls || '';
+    dot.style.background = cls === 'success' ? '#00e676'
+                         : cls === 'error'   ? '#ff4d6d' : '#00d4ff';
+    dot.style.boxShadow  = cls === 'success' ? '0 0 6px #00e676'
+                         : cls === 'error'   ? '0 0 6px #ff4d6d' : '0 0 6px #00d4ff';
+  };
+
   try {
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const devices  = await ZXing.BrowserCodeReader.listVideoInputDevices();
     const deviceId = devices.length > 1
-      ? devices[devices.length - 1].deviceId  // prefer back camera
+      ? devices[devices.length - 1].deviceId
       : undefined;
 
-    status.textContent = '🔍 Scanning for barcode...';
+    setStatus('Scanning for barcode...', 'active');
 
     await codeReader.decodeFromVideoDevice(deviceId, 'video', (res, err) => {
       if (res) {
-        const code = res.getText();
-        status.textContent = '✅ Barcode detected!';
-        result.textContent = code;
+        const barcode = res.getText();
+        setStatus('Barcode detected!', 'success');
+        code.textContent = barcode;
         result.style.display = 'block';
+        dot.style.animation = 'none';
         codeReader.reset();
-        // Pass barcode to Streamlit via query param + reload
         const url = new URL(window.parent.location.href);
-        url.searchParams.set('barcode', code);
-        window.parent.location.href = url.toString();
+        url.searchParams.set('barcode', barcode);
+        setTimeout(() => { window.parent.location.href = url.toString(); }, 600);
       }
     });
   } catch (e) {
-    status.textContent = '❌ Camera error: ' + e.message;
+    setStatus('Camera error: ' + e.message, 'error');
+    dot.style.animation = 'none';
   }
 })();
 </script>
