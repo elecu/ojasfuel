@@ -98,7 +98,36 @@ detected_barcode = None
 
 if _pyzbar_ok:
     try:
-        barcodes = _pyzbar.decode(pil_img)
+        def _try_decode(img_pil):
+            """Try pyzbar on multiple preprocessed versions of the image."""
+            import numpy as np
+            candidates = []
+
+            # Original + rotations
+            for angle in [0, 90, 180, 270]:
+                candidates.append(img_pil.rotate(angle, expand=True))
+
+            # If cv2 available: add grayscale + threshold + sharpened variants
+            if _cv2_ok:
+                arr = _cv2.cvtColor(np.array(img_pil), _cv2.COLOR_RGB2GRAY)
+                # Adaptive threshold
+                thresh = _cv2.adaptiveThreshold(arr, 255, _cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                                _cv2.THRESH_BINARY, 11, 2)
+                # Sharpen
+                kernel = np.array([[0,-1,0],[-1,5,-1],[0,-1,0]])
+                sharp = _cv2.filter2D(arr, -1, kernel)
+                for variant in [thresh, sharp]:
+                    pil_v = _Image.fromarray(variant)
+                    for angle in [0, 90, 180, 270]:
+                        candidates.append(pil_v.rotate(angle, expand=True))
+
+            for img in candidates:
+                result = _pyzbar.decode(img)
+                if result:
+                    return result
+            return []
+
+        barcodes = _try_decode(pil_img)
         if barcodes:
             code = barcodes[0].data.decode('utf-8')
             detected_barcode = code
