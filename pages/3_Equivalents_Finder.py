@@ -17,7 +17,7 @@ init_session()
 inject_theme()
 classifier = ProductClassifier()
 
-# Maps internal nutrient keys (from OFF data) to i18n translation keys
+# ── Nutrient label translation map ───────────────────────────────────────────
 _NUTRIENT_KEYS = {
     'Energy (kcal)':      'nutrient_energy_kcal',
     'Energy (kJ)':        'nutrient_energy_kj',
@@ -32,8 +32,8 @@ _NUTRIENT_KEYS = {
 }
 
 def _tn(nutrient_key: str) -> str:
-    """Translate a nutrient key or return it as-is if not mapped."""
     return t(_NUTRIENT_KEYS[nutrient_key]) if nutrient_key in _NUTRIENT_KEYS else nutrient_key
+
 
 # ── Match priority config ─────────────────────────────────────────────────────
 _MATCH_MODES = {
@@ -45,10 +45,6 @@ _MATCH_MODES = {
 
 
 def _macro_score(orig: dict, cand: dict, weights: list[tuple[str, float]]) -> tuple[float, dict]:
-    """
-    Composite normalized distance across selected macros.
-    Returns (score, per_macro_diff_pct).
-    """
     score = 0.0
     diffs = {}
     for macro, w in weights:
@@ -61,7 +57,6 @@ def _macro_score(orig: dict, cand: dict, weights: list[tuple[str, float]]) -> tu
 
 
 def _passes_threshold(orig: dict, cand: dict, macros: list[tuple[str, float]], threshold: float) -> bool:
-    """All included macros must be within ±threshold of original."""
     for macro, _ in macros:
         o = orig.get(macro, 0) or 0
         c = cand.get(macro, 0) or 0
@@ -72,10 +67,38 @@ def _passes_threshold(orig: dict, cand: dict, macros: list[tuple[str, float]], t
     return True
 
 
-def parse_serving_grams(serving_str: str) -> float | None:
-    """Extract grams from strings like '1 slice (30g)', '30g', '2 tortillas (50 g)'."""
-    m = re.search(r'\(?\s*(\d+(?:\.\d+)?)\s*g\s*\)?', serving_str or '', re.IGNORECASE)
-    return float(m.group(1)) if m else None
+def parse_serving_grams(product: dict) -> tuple[float | None, str]:
+    """
+    Try to get serving size in grams from a product dict.
+    Returns (grams, display_label) or (None, '').
+    Checks: serving_size string, then _raw.serving_quantity numeric field.
+    """
+    srv_str = product.get('serving_size', '') or ''
+    m = re.search(r'\(?\s*(\d+(?:\.\d+)?)\s*g\s*\)?', srv_str, re.IGNORECASE)
+    if m:
+        return float(m.group(1)), srv_str
+
+    raw = product.get('_raw', {}) or {}
+    qty = raw.get('serving_quantity')
+    if qty:
+        try:
+            g = float(qty)
+            label = srv_str or f"{g}g"
+            return g, label
+        except (TypeError, ValueError):
+            pass
+
+    return None, ''
+
+
+def _equiv_grams_for_macro(orig_nutr: dict, alt_nutr: dict, macro: str, orig_grams: float) -> float | None:
+    """How many grams of alt product match `orig_grams` of orig for a single macro."""
+    orig_val = orig_nutr.get(macro, 0) or 0
+    alt_per_100 = alt_nutr.get(macro, 0) or 0
+    if not orig_val or not alt_per_100:
+        return None
+    target = orig_val * orig_grams / 100
+    return round(target / alt_per_100 * 100, 1)
 
 
 # ── Page ──────────────────────────────────────────────────────────────────────
@@ -111,6 +134,22 @@ with st.container(border=True):
             col.metric(label, f"{orig_nutrition[k]} {unit}")
 
 orig_kcal = orig_nutrition.get('Energy (kcal)', 0)
+
+st.divider()
+
+# ── Match priority — shown at top, applies to both manual and auto-find ───────
+st.subheader(t('match_priority'))
+mode_keys = list(_MATCH_MODES.keys())
+mode_labels = [t(_MATCH_MODES[k][0]) for k in mode_keys]
+selected_mode_label = st.radio(
+    t('match_priority'),
+    options=mode_labels,
+    horizontal=True,
+    label_visibility='collapsed',
+)
+selected_mode = mode_keys[mode_labels.index(selected_mode_label)]
+_, active_weights = _MATCH_MODES[selected_mode]
+active_macro_names = [m for m, _ in active_weights]
 
 st.divider()
 
@@ -153,19 +192,40 @@ if alternatives:
     alt_nutrition = alternative.get('nutrition', {})
     alt_kcal_100g = alt_nutrition.get('Energy (kcal)', 0)
     alt_name = alternative.get('name') or 'Alternative'
-    alt_serving = alternative.get('serving_size', '')
+    alt_srv_g, alt_srv_label = parse_serving_grams(alternative)
 
     st.divider()
 
-    # ── Calculate equivalent quantity ────────────────────────────────────────
-    if orig_kcal and alt_kcal_100g:
-        equiv_grams = round((orig_scaled.get('Energy (kcal)', orig_kcal * orig_grams / 100) / alt_kcal_100g) * 100, 1)
+    # ── Calculate equivalent quantity using selected match mode ─────────────
+    # Compute per-macro equivalents, then weighted average for the chosen mode
+    per_macro_equiv = {}
+    for macro, _ in active_weights:
+        g = _equiv_grams_for_macro(orig_nutrition, alt_nutrition, macro, orig_grams)
+        if g is not None:
+            per_macro_equiv[macro] = g
+
+    if per_macro_equiv:
+        total_w = sum(w for m, w in active_weights if m in per_macro_equiv)
+        equiv_grams = round(
+            sum(per_macro_equiv[m] * w for m, w in active_weights if m in per_macro_equiv) / total_w, 1
+        )
+
         result_text = f"**{t('you_need', qty=f'{equiv_grams}g', name=alt_name)}**  ≈  {t('equiv_to_match', qty=orig_grams, name=orig_name)}"
-        alt_srv_g = parse_serving_grams(alt_serving)
         if alt_srv_g and alt_srv_g > 0:
             portions = equiv_grams / alt_srv_g
-            result_text += f"  |  {t('equiv_servings', n=portions, srv=alt_serving)}"
+            result_text += f"  ·  {t('equiv_servings', n=portions, srv=alt_srv_label)}"
         st.success(result_text)
+
+        # Per-macro breakdown (always shown so user sees how each macro matches)
+        per_macro_cols = st.columns(len(active_weights))
+        for col, (macro, w) in zip(per_macro_cols, active_weights):
+            label = _tn(macro).split(' (')[0]
+            g = per_macro_equiv.get(macro)
+            if g is not None:
+                srv_note = f" · {per_macro_equiv[macro] / alt_srv_g:.1f}×" if alt_srv_g and alt_srv_g > 0 else ""
+                col.metric(f"{t('match_for')} {label}", f"{g}g{srv_note}")
+            else:
+                col.caption(f"{label}: —")
     else:
         equiv_grams = orig_grams
         st.info(t('no_energy_data'))
@@ -224,20 +284,8 @@ st.divider()
 
 # ── Auto-find 5 equivalents ───────────────────────────────────────────────────
 st.subheader(t('find_auto'))
-
-# Match priority selector
-mode_keys = list(_MATCH_MODES.keys())
-mode_labels = [t(_MATCH_MODES[k][0]) for k in mode_keys]
-selected_mode_label = st.radio(
-    t('match_priority'),
-    options=mode_labels,
-    horizontal=True,
-)
-selected_mode = mode_keys[mode_labels.index(selected_mode_label)]
-_, active_weights = _MATCH_MODES[selected_mode]
-
-active_macro_names = [m for m, _ in active_weights]
 st.caption(t('auto_find_caption', name=orig_name, pct=int(threshold * 100)))
+st.caption(f"▸ {t('match_priority')}: **{selected_mode_label}**")
 
 if st.button(t('find_auto'), type='secondary'):
     with st.spinner(t('searching')):
@@ -266,7 +314,7 @@ if st.button(t('find_auto'), type='secondary'):
             for rank, (score, diffs, c) in enumerate(top5, 1):
                 with st.container(border=True):
                     c_nutr = c.get('nutrition', {})
-                    c_srv = c.get('serving_size', '')
+                    c_srv_g, c_srv_label = parse_serving_grams(c)
                     st.markdown(f"**#{rank}** {c.get('name','')} — {c.get('brand','')}")
 
                     macro_parts = []
@@ -279,14 +327,14 @@ if st.button(t('find_auto'), type='secondary'):
                         macro_parts.append(f"{label}: {val}{unit} ({sign}{d:.1f}%)")
                     st.caption('  ·  '.join(macro_parts))
 
-                    if c_srv:
-                        srv_g = parse_serving_grams(c_srv)
-                        if srv_g and srv_g > 0:
-                            c_kcal_100 = c_nutr.get('Energy (kcal)', 0)
-                            if orig_kcal and c_kcal_100:
-                                equiv_g = round(orig_kcal / c_kcal_100 * 100, 1)
-                                portions = equiv_g / srv_g
-                                st.caption(f"100g equiv → {equiv_g}g  ·  {t('equiv_servings', n=portions, srv=c_srv)}")
+                    c_kcal_100 = c_nutr.get('Energy (kcal)', 0)
+                    if orig_kcal and c_kcal_100:
+                        equiv_g = round(orig_kcal / c_kcal_100 * 100, 1)
+                        if c_srv_g and c_srv_g > 0:
+                            portions = equiv_g / c_srv_g
+                            st.caption(f"100g equiv → {equiv_g}g  ·  {t('equiv_servings', n=portions, srv=c_srv_label)}")
+                        else:
+                            st.caption(f"100g equiv → {equiv_g}g")
 
                     if st.button(t('use_this'), key=f'use_auto_{rank}'):
                         st.session_state['equiv_alternatives'] = [c]

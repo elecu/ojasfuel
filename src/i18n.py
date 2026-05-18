@@ -129,6 +129,7 @@ _EN = {
     'use_this': "Use this",
     'no_equivalents_found': "No equivalents found within ±{pct}%. Try increasing the threshold in Settings.",
     'no_macro_data': "Original product has no data for the selected macros.",
+    'match_for': "To match",
 
     # Photo upload
     'photo_source': 'Image source',
@@ -400,6 +401,7 @@ _ES = {
     'use_this': "Usar éste",
     'no_equivalents_found': "No se encontraron equivalentes dentro de ±{pct}%. Aumenta el umbral en Configuración.",
     'no_macro_data': "El producto original no tiene datos para los macros seleccionados.",
+    'match_for': "Para igualar",
 
     # Photo upload
     'photo_source': 'Fuente de imagen',
