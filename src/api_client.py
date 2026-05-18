@@ -7,7 +7,7 @@ import functools
 import requests
 import openfoodfacts
 
-_api = openfoodfacts.API(user_agent="SMAEUK/1.0")
+_api = openfoodfacts.API(user_agent="OjasFuel/1.0")
 
 # Map OFF countries_tags value → 2-letter country code for SDK subdomain
 _CC_MAP = {
@@ -37,7 +37,7 @@ _CC_MAP = {
 def _get_api(cc: str | None) -> openfoodfacts.API:
     """Return an API instance scoped to the given country code (or world if None)."""
     if cc:
-        return openfoodfacts.API(user_agent="SMAEUK/1.0", country=cc)
+        return openfoodfacts.API(user_agent="OjasFuel/1.0", country=cc)
     return _api
 
 
@@ -147,7 +147,7 @@ def format_product(raw: dict) -> dict:
     }
 
 
-_SEARCH_HEADERS = {'User-Agent': 'SMAEUK/1.0'}
+_SEARCH_HEADERS = {'User-Agent': 'OjasFuel/1.0'}
 
 _NUTRIMENT_MAP = {
     'Energy (kcal)': 'energy-kcal_100g',
@@ -279,6 +279,49 @@ def search_by_name(query: str, page_size: int = 20, country_code: str | None = N
         last_error = e
 
     raise RuntimeError(f"Search failed (both endpoints unavailable): {last_error}")
+
+
+def submit_product(
+    barcode: str,
+    name: str,
+    brand: str = '',
+    quantity: str = '',
+    ingredients: str = '',
+) -> dict:
+    """Submit a new product to Open Food Facts anonymously.
+
+    Returns {'ok': True} on success or {'ok': False, 'error': str} on failure.
+    Uses the anonymous OFF account (user_id=off, password=off).
+    """
+    import requests
+
+    data = {
+        'code': barcode.strip(),
+        'product_name': name.strip(),
+        'user_id': 'off',
+        'password': 'off',
+    }
+    if brand.strip():
+        data['brands'] = brand.strip()
+    if quantity.strip():
+        data['quantity'] = quantity.strip()
+    if ingredients.strip():
+        data['ingredients_text'] = ingredients.strip()
+
+    try:
+        resp = requests.post(
+            'https://world.openfoodfacts.org/cgi/product_jqm2.pl',
+            data=data,
+            timeout=15,
+            headers={'User-Agent': 'OjasFuel/1.0'},
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get('status') == 1:
+            return {'ok': True}
+        return {'ok': False, 'error': body.get('status_verbose', 'Unknown error')}
+    except Exception as exc:
+        return {'ok': False, 'error': str(exc)}
 
 
 def search_by_barcode(barcode: str) -> dict | None:

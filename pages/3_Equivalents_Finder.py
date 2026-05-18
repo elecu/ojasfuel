@@ -1,5 +1,5 @@
 """
-SMAEUK — Equivalents Finder page
+OjasFuel — Equivalents Finder page
 """
 
 import streamlit as st
@@ -11,7 +11,7 @@ from src.theme import inject_theme
 from src.api_client import search_by_name
 from src.classifier import ProductClassifier
 
-st.set_page_config(page_title='SMAEUK — Equivalents', page_icon='🔄', layout='wide')
+st.set_page_config(page_title='OjasFuel — Equivalents', page_icon='🔄', layout='wide')
 init_session()
 inject_theme()
 classifier = ProductClassifier()

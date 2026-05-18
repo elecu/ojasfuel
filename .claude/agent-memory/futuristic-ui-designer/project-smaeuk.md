@@ -1,11 +1,11 @@
 ---
 name: project-smaeuk
-description: SMAEUK Streamlit food scanner app — design decisions and constraints
+description: OjasFuel Streamlit food scanner app — design decisions and constraints
 metadata:
   type: project
 ---
 
-SMAEUK is a Streamlit multi-page food scanner app (vegetarian/vegan classifier) using Open Food Facts data.
+OjasFuel is a Streamlit multi-page food scanner app (vegetarian/vegan classifier) using Open Food Facts data.
 
 **Accent color chosen:** Electric cyan `#00d4ff` (dark) / `#0099cc` (light)
 **Font:** Inter (Google Fonts import via CSS)

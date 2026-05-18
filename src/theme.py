@@ -1,5 +1,5 @@
 """
-SMAEUK — Shared theme/CSS injection utility.
+OjasFuel — Shared theme/CSS injection utility.
 
 Call inject_theme() at the top of every page (after init_session).
 It reads st.session_state['theme'] ('dark' | 'light') and injects the

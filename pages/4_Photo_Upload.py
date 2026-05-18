@@ -1,5 +1,5 @@
 """
-SMAEUK — Photo Upload page
+OjasFuel — Photo Upload page
 Barcode detection (pyzbar) + OCR (easyocr) + upload to Open Food Facts
 """
 
@@ -12,7 +12,7 @@ from src.i18n import t, init_session
 from src.theme import inject_theme
 from src.api_client import search_by_barcode
 
-st.set_page_config(page_title='SMAEUK — Photo Upload', page_icon='📷', layout='wide')
+st.set_page_config(page_title='OjasFuel — Photo Upload', page_icon='📷', layout='wide')
 init_session()
 inject_theme()
 
@@ -240,7 +240,7 @@ with st.expander('Login & Upload'):
                     resp = requests.post(
                         'https://world.openfoodfacts.org/cgi/product_jqm2.pl',
                         data=payload,
-                        headers={'User-Agent': 'SMAEUK/1.0'},
+                        headers={'User-Agent': 'OjasFuel/1.0'},
                         timeout=15,
                     )
                     data = resp.json()

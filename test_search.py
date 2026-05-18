@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SMAEUK - Test basic flow
+OjasFuel - Test basic flow
 Search product by name → Extract ingredients & nutrition → Classify
 """
 
@@ -27,13 +27,13 @@ def search_and_classify(product_name):
     """Search product by name and classify"""
     
     print("\n" + "="*80)
-    print("🔍 SMAEUK - Product Search & Classify")
+    print("🔍 OjasFuel - Product Search & Classify")
     print("="*80 + "\n")
     
     print(f"🔎 Searching for: '{product_name}'\n")
     
     # Initialize API
-    api = openfoodfacts.API(user_agent="SMAEUK/1.0")
+    api = openfoodfacts.API(user_agent="OjasFuel/1.0")
     
     # Search
     try:

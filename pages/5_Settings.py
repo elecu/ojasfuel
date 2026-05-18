@@ -1,5 +1,5 @@
 """
-SMAEUK — Settings page
+OjasFuel — Settings page
 """
 
 import streamlit as st
@@ -10,7 +10,7 @@ from src.i18n import t, init_session, DEFAULT_SETTINGS
 from src.theme import inject_theme
 from src.storage import save_to_localstorage, clear_localstorage
 
-st.set_page_config(page_title='SMAEUK — Settings', page_icon='⚙️', layout='wide')
+st.set_page_config(page_title='OjasFuel — Settings', page_icon='⚙️', layout='wide')
 init_session()
 inject_theme()
 
@@ -214,6 +214,13 @@ st.divider()
 # ── About ─────────────────────────────────────────────────────────────────────
 st.subheader(t('about'))
 
+logo_col, name_col = st.columns([1, 5], vertical_alignment='center')
+with logo_col:
+    st.image('logo_icon.png', width=64)
+with name_col:
+    st.image('logo_text.png', width=200)
+
+st.write('')
 col_info, col_logo = st.columns([3, 1])
 with col_info:
     st.markdown(f"**{t('version')}:** v0.1.0 Beta")

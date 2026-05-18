@@ -7,7 +7,7 @@ import streamlit as st
 
 _EN = {
     # App-wide
-    'app_title': 'SMAEUK',
+    'app_title': 'OjasFuel',
     'app_subtitle': 'Vegetarian & Vegan Food Scanner',
     'settings': 'Settings',
     'search': 'Search',
@@ -40,7 +40,7 @@ _EN = {
     'barcode_not_detected': '❌ No barcode detected in the image. Try again.',
     'view_detail': 'View Details',
     'vegan_tag': '✨ Vegan',
-    'vegetarian_tag': '🥦 Vegetarian',
+    'vegetarian_tag': 'Vegetarian',
     'not_vegetarian_tag': '❌ Not Vegetarian',
     'unknown_tag': '❓ Unknown',
     'passes_filter': '✅ Passes your filters',
@@ -157,11 +157,28 @@ _EN = {
     'data_source_text': 'All product data sourced from [Open Food Facts](https://world.openfoodfacts.org/) — [Open Database Licence (ODbL)](https://opendatacommons.org/licenses/odbl/)',
     'disclaimer': 'This app is not affiliated with Open Food Facts.',
     'off_credit': '© Open Food Facts contributors',
+
+    # Contribute page
+    'contribute_button': '➕ Add this product to Open Food Facts',
+    'contribute_title': 'Add a New Product',
+    'contribute_subtitle': 'Help the community — this product will be submitted anonymously to Open Food Facts.',
+    'contribute_barcode': 'Barcode (required)',
+    'contribute_barcode_help': 'EAN-13 or UPC barcode number',
+    'contribute_name': 'Product name (required)',
+    'contribute_brand': 'Brand',
+    'contribute_quantity': 'Quantity (e.g. 500g)',
+    'contribute_ingredients': 'Ingredients (in English if possible)',
+    'contribute_submit': '📤 Submit to Open Food Facts',
+    'contribute_submitting': 'Submitting...',
+    'contribute_success': '✅ Product submitted! It will be reviewed by the Open Food Facts community.',
+    'contribute_failed': '❌ Submission failed: {err}',
+    'contribute_required': 'Barcode and product name are required.',
+    'contribute_note': 'Submitted anonymously — no account needed.',
 }
 
 _ES = {
     # App-wide
-    'app_title': 'SMAEUK',
+    'app_title': 'OjasFuel',
     'app_subtitle': 'Escáner de Alimentos Vegetarianos y Veganos',
     'settings': 'Configuración',
     'search': 'Buscar',
@@ -194,7 +211,7 @@ _ES = {
     'barcode_not_detected': '❌ No se detectó código de barras en la imagen. Intenta de nuevo.',
     'view_detail': 'Ver Detalles',
     'vegan_tag': '✨ Vegano',
-    'vegetarian_tag': '🥦 Vegetariano',
+    'vegetarian_tag': 'Vegetariano',
     'not_vegetarian_tag': '❌ No Vegetariano',
     'unknown_tag': '❓ Desconocido',
     'passes_filter': '✅ Cumple tus filtros',
@@ -311,6 +328,23 @@ _ES = {
     'data_source_text': 'Todos los datos de productos provienen de [Open Food Facts](https://world.openfoodfacts.org/) — [Licencia Open Database (ODbL)](https://opendatacommons.org/licenses/odbl/)',
     'disclaimer': 'Esta aplicación no está afiliada con Open Food Facts.',
     'off_credit': '© Contribuidores de Open Food Facts',
+
+    # Contribute page
+    'contribute_button': '➕ Agregar este producto a Open Food Facts',
+    'contribute_title': 'Agregar Nuevo Producto',
+    'contribute_subtitle': 'Ayuda a la comunidad — este producto se enviará de forma anónima a Open Food Facts.',
+    'contribute_barcode': 'Código de barras (requerido)',
+    'contribute_barcode_help': 'Código de barras EAN-13 o UPC',
+    'contribute_name': 'Nombre del producto (requerido)',
+    'contribute_brand': 'Marca',
+    'contribute_quantity': 'Cantidad (ej: 500g)',
+    'contribute_ingredients': 'Ingredientes (en inglés si es posible)',
+    'contribute_submit': '📤 Enviar a Open Food Facts',
+    'contribute_submitting': 'Enviando...',
+    'contribute_success': '✅ ¡Producto enviado! Será revisado por la comunidad de Open Food Facts.',
+    'contribute_failed': '❌ Error al enviar: {err}',
+    'contribute_required': 'El código de barras y el nombre del producto son requeridos.',
+    'contribute_note': 'Enviado de forma anónima — no se necesita cuenta.',
 }
 
 _TRANSLATIONS = {'en': _EN, 'es': _ES}

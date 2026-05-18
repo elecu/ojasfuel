@@ -1,19 +1,19 @@
 """
-SMAEUK — Home / Search page
+OjasFuel — Home / Search page
 """
 
 import streamlit as st
 import sys
 sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 
-from src.i18n import t, init_session
+from src.i18n import t, init_session, get_lang
 from src.theme import inject_theme
 from src.api_client import search_by_name, search_by_barcode
 from src.classifier import ProductClassifier
 
 st.set_page_config(
-    page_title='SMAEUK',
-    page_icon='🥦',
+    page_title='OjasFuel',
+    page_icon='🌿',
     layout='wide',
     initial_sidebar_state='collapsed',
 )
@@ -109,7 +109,11 @@ def _classify_results(products: list) -> list:
 # ── Header ──────────────────────────────────────────────────────────────────
 col_title, col_settings = st.columns([5, 1])
 with col_title:
-    st.title(f"🥦 {t('app_title')}")
+    logo_col, name_col = st.columns([1, 4], vertical_alignment='center')
+    with logo_col:
+        st.image('logo_icon.png', width=72)
+    with name_col:
+        st.image('logo_text.png', width=220)
     st.caption(t('app_subtitle'))
 with col_settings:
     st.write('')
@@ -186,6 +190,7 @@ if (search_clicked and query.strip()) or (auto_search and query.strip()):
                 else:
                     products = []
                     st.warning(f"Barcode {query.strip()} not found in Open Food Facts.")
+                    st.session_state['contribute_prefill_barcode'] = query.strip()
             else:
                 cs = settings.get('countries', {})
                 cc = cs.get('cc') if isinstance(cs, dict) else None
@@ -200,7 +205,20 @@ if (search_clicked and query.strip()) or (auto_search and query.strip()):
         st.success(t('results_count', n=len(products)))
     elif query.strip():
         st.session_state['search_results'] = []
+        st.session_state['contribute_prefill_name'] = query.strip()
         st.warning(t('no_results'))
+
+# ── Contribute prompt (shown only after a failed search) ─────────────────────
+_no_results_after_search = (
+    (search_clicked or auto_search)
+    and query.strip()
+    and not st.session_state.get('search_results')
+)
+if _no_results_after_search or st.session_state.get('contribute_prefill_barcode'):
+    st.divider()
+    st.caption('🔍 ' + ('Not what you were looking for?' if get_lang() == 'en' else '¿No encontraste lo que buscabas?'))
+    if st.button(t('contribute_button'), key='btn_contribute'):
+        st.switch_page('pages/6_Contribute.py')
 
 # ── Results ──────────────────────────────────────────────────────────────────
 results = st.session_state.get('search_results', [])

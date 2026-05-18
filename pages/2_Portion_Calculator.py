@@ -1,5 +1,5 @@
 """
-SMAEUK — Portion Calculator page
+OjasFuel — Portion Calculator page
 """
 
 import streamlit as st
@@ -9,7 +9,7 @@ sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 from src.i18n import t, init_session
 from src.theme import inject_theme
 
-st.set_page_config(page_title='SMAEUK — Portions', page_icon='⚖️', layout='wide')
+st.set_page_config(page_title='OjasFuel — Portions', page_icon='⚖️', layout='wide')
 init_session()
 inject_theme()
 

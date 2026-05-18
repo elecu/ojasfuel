@@ -1,11 +1,11 @@
-# SMAEUK - Vegan Product Database Project
+# OjasFuel - Vegan Product Database Project
 ## Complete Context for Claude VS Code Extension
 
 ---
 
 ## 📋 PROJECT OVERVIEW
 
-**SMAEUK** = UK vegan/vegetarian food database for nutritionists
+**OjasFuel** = UK vegan/vegetarian food database for nutritionists
 
 **Goal:** Create a web app where users can:
 1. Search products by name
@@ -107,7 +107,7 @@ result = classifier.classify("water, sugar, salt")
 ### **Open Food Facts API** (`test_search.py`)
 ```python
 import openfoodfacts
-api = openfoodfacts.API(user_agent="SMAEUK/1.0")
+api = openfoodfacts.API(user_agent="OjasFuel/1.0")
 results = api.product.text_search("bread", page_size=5)
 products = results['products']
 # Get: name, ingredients, nutrition (30+ fields), brand, id

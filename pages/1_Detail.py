@@ -1,5 +1,5 @@
 """
-SMAEUK — Product Detail page
+OjasFuel — Product Detail page
 """
 
 import streamlit as st
@@ -11,7 +11,7 @@ from src.theme import inject_theme
 from src.api_client import NUTRITION_GROUPS, search_by_barcode
 from src.classifier import ProductClassifier
 
-st.set_page_config(page_title='SMAEUK — Detail', page_icon='🥦', layout='wide')
+st.set_page_config(page_title='OjasFuel — Detail', page_icon='🌿', layout='wide')
 init_session()
 inject_theme()
 classifier = ProductClassifier()
