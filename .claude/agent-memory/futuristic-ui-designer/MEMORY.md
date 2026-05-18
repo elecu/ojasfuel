@@ -1,0 +1,1 @@
+- [SMAEUK Project](project-smaeuk.md) — Streamlit food scanner: cyan accent, Inter font, CSS-var theme system via src/theme.py
