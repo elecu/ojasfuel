@@ -564,7 +564,7 @@ DEFAULT_SETTINGS = {
     'ovo': False,
     'ovo_lacto': False,
     'strict_egg_traces': False,
-    'equivalents_threshold': 0.10,
+    'equivalents_threshold': 0.25,
     'lang': 'en',
     'countries': {'tags': [], 'cc': None},  # empty = all countries
 }

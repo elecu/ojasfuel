@@ -85,7 +85,7 @@ st.subheader(t('classification'))
 
 settings = st.session_state['settings']
 ingredients = product.get('ingredients', '')
-cl = classifier.classify(ingredients, settings)
+cl = classifier.classify(ingredients, settings, product_name=product.get('name', ''))
 
 if cl.get('is_vegan') is None:
     st.warning(t('no_ingredients'))

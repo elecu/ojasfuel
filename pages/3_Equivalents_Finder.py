@@ -9,8 +9,27 @@ sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 
 from src.i18n import t, init_session
 from src.theme import inject_theme
-from src.api_client import search_by_name
+from src.api_client import search_by_name as _off_search
+from src.smae_client import search_by_name as _smae_search
 from src.classifier import ProductClassifier
+
+
+def _search(query: str, page_size: int, is_mexico: bool) -> list[dict]:
+    """Search SMAE first (Mexico) then OFF, deduplicating by name."""
+    results = []
+    seen_names = set()
+    if is_mexico:
+        for p in _smae_search(query, page_size=page_size):
+            key = p['name'].lower()
+            if key not in seen_names:
+                seen_names.add(key)
+                results.append(p)
+    for p in _off_search(query, page_size=page_size):
+        key = p['name'].lower()
+        if key not in seen_names:
+            seen_names.add(key)
+            results.append(p)
+    return results[:page_size]
 
 st.set_page_config(page_title='OjasFuel — Equivalents', page_icon='🔄', layout='wide')
 init_session()
@@ -118,7 +137,9 @@ orig_name = original.get('name') or 'Original'
 orig_brand = original.get('brand') or ''
 
 settings = st.session_state['settings']
-threshold = settings.get('equivalents_threshold', 0.10)
+threshold = settings.get('equivalents_threshold', 0.25)
+cs = settings.get('countries', {})
+is_mexico = (cs.get('cc') if isinstance(cs, dict) else None) == 'mx'
 
 # ── Original product summary ──────────────────────────────────────────────────
 st.subheader(t('original_product'))
@@ -174,7 +195,7 @@ alt_query = st.text_input(t('search_alternative'), placeholder=orig_name)
 if st.button(t('search_button'), key='alt_search') and alt_query.strip():
     with st.spinner(t('searching')):
         try:
-            alts = search_by_name(alt_query.strip(), page_size=10)
+            alts = _search(alt_query.strip(), page_size=10, is_mexico=is_mexico)
             st.session_state['equiv_alternatives'] = alts
         except Exception as e:
             st.error(str(e))
@@ -183,7 +204,7 @@ alternatives = st.session_state.get('equiv_alternatives', [])
 
 if alternatives:
     alt_names = [
-        f"{p.get('name','?')} — {p.get('brand','')}"
+        f"{'🇲🇽 ' if p.get('_source')=='smae' else ''}{p.get('name','?')} — {p.get('brand','')}"
         for p in alternatives
     ]
     chosen_idx = st.selectbox(t('select_alternative'), range(len(alt_names)),
@@ -290,7 +311,7 @@ st.caption(f"▸ {t('match_priority')}: **{selected_mode_label}**")
 if st.button(t('find_auto'), type='secondary'):
     with st.spinner(t('searching')):
         try:
-            candidates = search_by_name(orig_name.split(' ')[0], page_size=20)
+            candidates = _search(orig_name.split(' ')[0], page_size=20, is_mexico=is_mexico)
         except Exception as e:
             st.error(str(e))
             candidates = []
@@ -315,7 +336,8 @@ if st.button(t('find_auto'), type='secondary'):
                 with st.container(border=True):
                     c_nutr = c.get('nutrition', {})
                     c_srv_g, c_srv_label = parse_serving_grams(c)
-                    st.markdown(f"**#{rank}** {c.get('name','')} — {c.get('brand','')}")
+                    source_badge = " 🇲🇽 SMAE" if c.get('_source') == 'smae' else ""
+                    st.markdown(f"**#{rank}** {c.get('name','')} — {c.get('brand','')}{source_badge}")
 
                     macro_parts = []
                     for macro in active_macro_names:

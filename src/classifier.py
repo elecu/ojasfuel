@@ -21,9 +21,9 @@ def _find_matches(text: str, patterns: list[str]) -> list[str]:
 
 
 class ProductClassifier:
-    def classify(self, ingredients_text: str, filters: dict = None) -> dict:
+    def classify(self, ingredients_text: str, filters: dict = None, **_kwargs) -> dict:
         """
-        Classify a product by its ingredients text.
+        Classify a product by its ingredients text (and optionally product name).
 
         Returns:
             is_vegan (bool)
@@ -38,7 +38,9 @@ class ProductClassifier:
         if filters is None:
             filters = {}
 
-        if not ingredients_text or ingredients_text.strip() in ('', 'N/A', 'n/a'):
+        no_ingredients = not ingredients_text or ingredients_text.strip() in ('', 'N/A', 'n/a')
+
+        if no_ingredients:
             return {
                 'is_vegan': None,
                 'is_vegetarian': None,
@@ -49,6 +51,8 @@ class ProductClassifier:
                 'animal_products_found': [],
                 'dairy_or_eggs_found': [],
             }
+
+        name_scan = False
 
         text = ingredients_text.lower()
 

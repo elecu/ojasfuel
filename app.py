@@ -76,7 +76,7 @@ def _classify_results(products: list) -> list:
         off_veg = off.get('is_vegetarian')   # True / False / None
         off_vegan = off.get('is_vegan')       # True / False / None
 
-        p['_classification'] = classifier.classify(p.get('ingredients', ''), settings)
+        p['_classification'] = classifier.classify(p.get('ingredients', ''), settings, product_name=p.get('name', ''))
         cl = p['_classification']
 
         # Country post-filter: client-side check on countries_tags
