@@ -9,6 +9,7 @@ sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 from src.i18n import t, init_session, get_lang
 from src.theme import inject_theme
 from src.api_client import search_by_name, search_by_barcode
+from src import smae_client
 from src.classifier import ProductClassifier
 
 st.set_page_config(
@@ -127,10 +128,10 @@ active_filters = [k for k in ('no_garlic','no_onion','no_caffeine','no_alcohol',
                                'ovo_lacto','strict_egg_traces') if settings.get(k)]
 mode = settings.get('mode', 'vegetarian')
 
-banner_parts = [f"Mode: **{mode.capitalize()}**"]
+banner_parts = [f"{t('diet_mode')}: **{t(mode)}**"]
 if active_filters:
-    banner_parts.append(f"{len(active_filters)} restriction(s) active")
-st.info('  |  '.join(banner_parts) + '  —  ' + t('beta_banner'))
+    banner_parts.append(t('restrictions_active', n=len(active_filters)))
+st.info('  |  '.join(banner_parts))
 
 st.divider()
 
@@ -183,17 +184,34 @@ auto_search = bool(_scanned)
 if (search_clicked and query.strip()) or (auto_search and query.strip()):
     with st.spinner(t('searching')):
         try:
+            cs = settings.get('countries', {})
+            cc = cs.get('cc') if isinstance(cs, dict) else None
+            is_mexico = cc == 'mx'
+
             if _is_barcode(query.strip()):
+                # For Mexico: try OFF first (some products may have barcodes), then show hint
                 product = search_by_barcode(query.strip())
                 if product:
                     products = [product]
                 else:
                     products = []
-                    st.warning(f"Barcode {query.strip()} not found in Open Food Facts.")
+                    if is_mexico:
+                        st.warning(t('smae_no_barcode'))
+                    else:
+                        st.warning(t('barcode_not_found_off', code=query.strip()))
                     st.session_state['contribute_prefill_barcode'] = query.strip()
+            elif is_mexico:
+                # Hybrid: SMAE first, then OFF Mexico
+                smae_results = smae_client.search_by_name(query.strip(), page_size=20)
+                try:
+                    off_results = search_by_name(query.strip(), page_size=10, country_code='mx')
+                except Exception:
+                    off_results = []
+                seen_names = {r['name'].lower() for r in smae_results}
+                products = smae_results + [
+                    p for p in off_results if p['name'].lower() not in seen_names
+                ]
             else:
-                cs = settings.get('countries', {})
-                cc = cs.get('cc') if isinstance(cs, dict) else None
                 products = search_by_name(query.strip(), page_size=20, country_code=cc)
         except Exception as e:
             st.error(f"{t('error')}: {e}")
@@ -216,7 +234,7 @@ _no_results_after_search = (
 )
 if _no_results_after_search or st.session_state.get('contribute_prefill_barcode'):
     st.divider()
-    st.caption('🔍 ' + ('Not what you were looking for?' if get_lang() == 'en' else '¿No encontraste lo que buscabas?'))
+    st.caption('🔍 ' + t('not_found_prompt'))
     if st.button(t('contribute_button'), key='btn_contribute'):
         st.switch_page('pages/6_Contribute.py')
 
@@ -233,17 +251,21 @@ if results:
             with c1:
                 name = product.get('name') or 'Unknown'
                 brand = product.get('brand') or ''
+                source = product.get('_source', '')
                 st.markdown(f"**{name}**")
-                if brand:
+                if source == 'smae':
+                    st.caption(f"🇲🇽 {t('smae_source_label')}")
+                elif brand:
                     st.caption(brand)
 
-                # Ingredients preview
-                ingr = product.get('ingredients', '')
-                if ingr:
-                    preview = ingr[:120] + ('…' if len(ingr) > 120 else '')
-                    st.caption(f"_{preview}_")
-                else:
-                    st.caption(f"_{t('no_ingredients')}_")
+                # Ingredients preview (skip for SMAE entries — no real ingredient list)
+                if source != 'smae':
+                    ingr = product.get('ingredients', '')
+                    if ingr:
+                        preview = ingr[:120] + ('…' if len(ingr) > 120 else '')
+                        st.caption(f"_{preview}_")
+                    else:
+                        st.caption(f"_{t('no_ingredients')}_")
 
             with c2:
                 diet_tag, _ = _diet_tags(product)
@@ -262,7 +284,7 @@ if results:
                 if qty:
                     st.caption(f"📦 {qty}")
                 if nutri:
-                    st.caption(f"Nutri-Score: **{nutri}**")
+                    st.caption(f"{t('nutriscore')}: **{nutri}**")
 
             with c3:
                 if st.button(t('view_detail'), key=f'detail_{idx}', use_container_width=True):

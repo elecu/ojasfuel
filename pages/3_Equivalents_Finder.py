@@ -2,6 +2,7 @@
 OjasFuel — Equivalents Finder page
 """
 
+import re
 import streamlit as st
 import sys
 sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
@@ -16,6 +17,68 @@ init_session()
 inject_theme()
 classifier = ProductClassifier()
 
+# Maps internal nutrient keys (from OFF data) to i18n translation keys
+_NUTRIENT_KEYS = {
+    'Energy (kcal)':      'nutrient_energy_kcal',
+    'Energy (kJ)':        'nutrient_energy_kj',
+    'Protein (g)':        'nutrient_protein',
+    'Fat (g)':            'nutrient_fat',
+    'Saturated Fat (g)':  'nutrient_saturated_fat',
+    'Carbohydrates (g)':  'nutrient_carbohydrates',
+    'Sugars (g)':         'nutrient_sugars',
+    'Fiber (g)':          'nutrient_fiber',
+    'Sodium (mg)':        'nutrient_sodium',
+    'Salt (g)':           'nutrient_salt',
+}
+
+def _tn(nutrient_key: str) -> str:
+    """Translate a nutrient key or return it as-is if not mapped."""
+    return t(_NUTRIENT_KEYS[nutrient_key]) if nutrient_key in _NUTRIENT_KEYS else nutrient_key
+
+# ── Match priority config ─────────────────────────────────────────────────────
+_MATCH_MODES = {
+    'cal_only':          ('match_cal_only',          [('Energy (kcal)', 1.0)]),
+    'cal_protein':       ('match_cal_protein',        [('Energy (kcal)', 0.5), ('Protein (g)', 0.5)]),
+    'cal_protein_carbs': ('match_cal_protein_carbs',  [('Energy (kcal)', 0.4), ('Protein (g)', 0.4), ('Carbohydrates (g)', 0.2)]),
+    'protein_priority':  ('match_protein_priority',   [('Protein (g)', 0.7), ('Energy (kcal)', 0.3)]),
+}
+
+
+def _macro_score(orig: dict, cand: dict, weights: list[tuple[str, float]]) -> tuple[float, dict]:
+    """
+    Composite normalized distance across selected macros.
+    Returns (score, per_macro_diff_pct).
+    """
+    score = 0.0
+    diffs = {}
+    for macro, w in weights:
+        o = orig.get(macro, 0) or 0
+        c = cand.get(macro, 0) or 0
+        rel = abs(c - o) / max(o, 1)
+        score += w * rel
+        diffs[macro] = (c - o) / max(o, 1) * 100
+    return score, diffs
+
+
+def _passes_threshold(orig: dict, cand: dict, macros: list[tuple[str, float]], threshold: float) -> bool:
+    """All included macros must be within ±threshold of original."""
+    for macro, _ in macros:
+        o = orig.get(macro, 0) or 0
+        c = cand.get(macro, 0) or 0
+        if o == 0:
+            continue
+        if abs(c - o) / o > threshold:
+            return False
+    return True
+
+
+def parse_serving_grams(serving_str: str) -> float | None:
+    """Extract grams from strings like '1 slice (30g)', '30g', '2 tortillas (50 g)'."""
+    m = re.search(r'\(?\s*(\d+(?:\.\d+)?)\s*g\s*\)?', serving_str or '', re.IGNORECASE)
+    return float(m.group(1)) if m else None
+
+
+# ── Page ──────────────────────────────────────────────────────────────────────
 if st.button(t('back')):
     st.switch_page('pages/1_Detail.py')
 
@@ -43,23 +106,24 @@ with st.container(border=True):
     cols = st.columns(len(key_macros))
     for col, k in zip(cols, key_macros):
         if k in orig_nutrition:
-            col.metric(k.split(' (')[0], f"{orig_nutrition[k]} {k.split('(')[1].rstrip(')')}")
+            label = _tn(k).split(' (')[0]
+            unit = k.split('(')[1].rstrip(')')
+            col.metric(label, f"{orig_nutrition[k]} {unit}")
 
 orig_kcal = orig_nutrition.get('Energy (kcal)', 0)
 
 st.divider()
 
 # ── Portion to match ──────────────────────────────────────────────────────────
-st.subheader('Quantity to match')
+st.subheader(t('qty_to_match'))
 orig_grams = st.number_input(
-    'Original quantity (g)',
+    t('original_qty_g'),
     min_value=1.0,
     max_value=5000.0,
     value=100.0,
     step=10.0,
 )
 
-# Macro values for the given original quantity
 orig_scaled = {k: round(v * orig_grams / 100, 2) for k, v in orig_nutrition.items()}
 
 st.divider()
@@ -83,22 +147,28 @@ if alternatives:
         f"{p.get('name','?')} — {p.get('brand','')}"
         for p in alternatives
     ]
-    chosen_idx = st.selectbox('Select alternative', range(len(alt_names)),
+    chosen_idx = st.selectbox(t('select_alternative'), range(len(alt_names)),
                                format_func=lambda i: alt_names[i])
     alternative = alternatives[chosen_idx]
     alt_nutrition = alternative.get('nutrition', {})
     alt_kcal_100g = alt_nutrition.get('Energy (kcal)', 0)
     alt_name = alternative.get('name') or 'Alternative'
+    alt_serving = alternative.get('serving_size', '')
 
     st.divider()
 
     # ── Calculate equivalent quantity ────────────────────────────────────────
     if orig_kcal and alt_kcal_100g:
         equiv_grams = round((orig_scaled.get('Energy (kcal)', orig_kcal * orig_grams / 100) / alt_kcal_100g) * 100, 1)
-        st.success(f"**{t('you_need', qty=f'{equiv_grams}g', name=alt_name)}**  ≈  to match {orig_grams}g of {orig_name}")
+        result_text = f"**{t('you_need', qty=f'{equiv_grams}g', name=alt_name)}**  ≈  {t('equiv_to_match', qty=orig_grams, name=orig_name)}"
+        alt_srv_g = parse_serving_grams(alt_serving)
+        if alt_srv_g and alt_srv_g > 0:
+            portions = equiv_grams / alt_srv_g
+            result_text += f"  |  {t('equiv_servings', n=portions, srv=alt_serving)}"
+        st.success(result_text)
     else:
         equiv_grams = orig_grams
-        st.info('Cannot calculate equivalent (missing energy data) — showing same weight.')
+        st.info(t('no_energy_data'))
 
     # ── Side-by-side comparison ───────────────────────────────────────────────
     st.subheader(t('comparison'))
@@ -134,7 +204,7 @@ if alternatives:
             macro_warnings.append((field, diff_pct))
 
         row = st.columns([3, 2, 2, 2])
-        row[0].write(field)
+        row[0].write(_tn(field))
         row[1].write(f"{o_val}")
         row[2].write(f"{a_val}")
         diff_str = f"+{diff_pct:.1f}%" if diff_pct > 0 else f"{diff_pct:.1f}%"
@@ -144,49 +214,84 @@ if alternatives:
             row[3].write(diff_str)
 
     if macro_warnings:
-        st.warning(f"**Macro mismatches (>{int(threshold*100)}%):**")
+        st.warning(f"**{t('macro_mismatches', pct=int(threshold * 100))}**")
         for field, pct in macro_warnings:
-            st.caption(t('macro_warning', nutrient=field, pct=abs(pct)))
+            st.caption(t('macro_warning', nutrient=_tn(field), pct=abs(pct)))
     else:
         st.success(t('good_match'))
 
 st.divider()
 
 # ── Auto-find 5 equivalents ───────────────────────────────────────────────────
-st.subheader(f"🔍 {t('find_auto').replace('🔍 ', '')}")
-st.caption(f"Searches by name '{orig_name}', ranks by calorie match within ±{int(threshold*100)}%")
+st.subheader(t('find_auto'))
+
+# Match priority selector
+mode_keys = list(_MATCH_MODES.keys())
+mode_labels = [t(_MATCH_MODES[k][0]) for k in mode_keys]
+selected_mode_label = st.radio(
+    t('match_priority'),
+    options=mode_labels,
+    horizontal=True,
+)
+selected_mode = mode_keys[mode_labels.index(selected_mode_label)]
+_, active_weights = _MATCH_MODES[selected_mode]
+
+active_macro_names = [m for m, _ in active_weights]
+st.caption(t('auto_find_caption', name=orig_name, pct=int(threshold * 100)))
 
 if st.button(t('find_auto'), type='secondary'):
-    with st.spinner('Searching for equivalents...'):
+    with st.spinner(t('searching')):
         try:
             candidates = search_by_name(orig_name.split(' ')[0], page_size=20)
         except Exception as e:
             st.error(str(e))
             candidates = []
 
-    if orig_kcal:
+    has_orig_data = any(orig_nutrition.get(m, 0) for m, _ in active_weights)
+    if has_orig_data:
         scored = []
         for c in candidates:
-            c_kcal = c.get('nutrition', {}).get('Energy (kcal)', 0)
-            if not c_kcal:
+            c_nutr = c.get('nutrition', {})
+            if not c_nutr.get('Energy (kcal)'):
                 continue
-            diff = abs(c_kcal - orig_kcal) / orig_kcal
-            if diff <= threshold:
-                scored.append((diff, c))
+            if not _passes_threshold(orig_nutrition, c_nutr, active_weights, threshold):
+                continue
+            score, diffs = _macro_score(orig_nutrition, c_nutr, active_weights)
+            scored.append((score, diffs, c))
         scored.sort(key=lambda x: x[0])
         top5 = scored[:5]
 
         if top5:
-            st.success(f"Found {len(top5)} equivalents within ±{int(threshold*100)}%:")
-            for rank, (diff, c) in enumerate(top5, 1):
+            st.success(t('found_equivalents', n=len(top5), pct=int(threshold * 100)))
+            for rank, (score, diffs, c) in enumerate(top5, 1):
                 with st.container(border=True):
+                    c_nutr = c.get('nutrition', {})
+                    c_srv = c.get('serving_size', '')
                     st.markdown(f"**#{rank}** {c.get('name','')} — {c.get('brand','')}")
-                    c_kcal = c['nutrition'].get('Energy (kcal)', 0)
-                    st.caption(f"{c_kcal} kcal/100g  |  diff: {diff*100:.1f}%")
-                    if st.button('Use this', key=f'use_auto_{rank}'):
+
+                    macro_parts = []
+                    for macro in active_macro_names:
+                        val = c_nutr.get(macro, 0)
+                        d = diffs.get(macro, 0)
+                        sign = '+' if d > 0 else ''
+                        unit = macro.split('(')[1].rstrip(')') if '(' in macro else ''
+                        label = _tn(macro).split(' (')[0]
+                        macro_parts.append(f"{label}: {val}{unit} ({sign}{d:.1f}%)")
+                    st.caption('  ·  '.join(macro_parts))
+
+                    if c_srv:
+                        srv_g = parse_serving_grams(c_srv)
+                        if srv_g and srv_g > 0:
+                            c_kcal_100 = c_nutr.get('Energy (kcal)', 0)
+                            if orig_kcal and c_kcal_100:
+                                equiv_g = round(orig_kcal / c_kcal_100 * 100, 1)
+                                portions = equiv_g / srv_g
+                                st.caption(f"100g equiv → {equiv_g}g  ·  {t('equiv_servings', n=portions, srv=c_srv)}")
+
+                    if st.button(t('use_this'), key=f'use_auto_{rank}'):
                         st.session_state['equiv_alternatives'] = [c]
                         st.rerun()
         else:
-            st.warning(f"No equivalents found within ±{int(threshold*100)}%. Try increasing the threshold in Settings.")
+            st.warning(t('no_equivalents_found', pct=int(threshold * 100)))
     else:
-        st.warning("Original product has no energy data.")
+        st.warning(t('no_macro_data'))

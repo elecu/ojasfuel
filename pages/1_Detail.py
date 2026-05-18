@@ -7,6 +7,24 @@ import sys
 sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 
 from src.i18n import t, init_session
+
+# Maps OFF nutrient keys to i18n translation keys
+_NUTRIENT_KEYS = {
+    'Energy (kcal)':      'nutrient_energy_kcal',
+    'Energy (kJ)':        'nutrient_energy_kj',
+    'Protein (g)':        'nutrient_protein',
+    'Fat (g)':            'nutrient_fat',
+    'Saturated Fat (g)':  'nutrient_saturated_fat',
+    'Carbohydrates (g)':  'nutrient_carbohydrates',
+    'Sugars (g)':         'nutrient_sugars',
+    'Fiber (g)':          'nutrient_fiber',
+    'Sodium (mg)':        'nutrient_sodium',
+    'Salt (g)':           'nutrient_salt',
+}
+
+def _tn(nutrient_key: str) -> str:
+    """Translate a nutrient key or return it as-is if not mapped."""
+    return t(_NUTRIENT_KEYS[nutrient_key]) if nutrient_key in _NUTRIENT_KEYS else nutrient_key
 from src.theme import inject_theme
 from src.api_client import NUTRITION_GROUPS, search_by_barcode
 from src.classifier import ProductClassifier
@@ -24,7 +42,7 @@ product = st.session_state.get('selected_product')
 
 # Fetch full product data if we only have partial data from search API
 if product and product.get('_needs_full_load') and product.get('id'):
-    with st.spinner('Loading full product data...'):
+    with st.spinner(t('loading_full_product')):
         full = search_by_barcode(product['id'])
         if full:
             # Merge: keep search-result fields, overlay full product fields
@@ -40,7 +58,7 @@ if not product:
     st.stop()
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.title(product.get('name') or 'Unknown Product')
+st.title(product.get('name') or t('unknown_product'))
 
 col_meta, col_img = st.columns([3, 1])
 with col_meta:
@@ -115,7 +133,7 @@ st.subheader(t('nutrition_facts'))
 
 nutrition = product.get('nutrition', {})
 if not nutrition:
-    st.caption('No nutrition data available for this product.')
+    st.caption(t('no_nutrition_data'))
 else:
     group_labels = {
         'Macronutrients': t('macronutrients'),
@@ -131,10 +149,10 @@ else:
             if rows:
                 for field, value in rows:
                     col_name, col_val = st.columns([3, 1])
-                    col_name.markdown(field)
+                    col_name.markdown(_tn(field))
                     col_val.markdown(f"**{value}**")
             else:
-                st.caption('No data available for this group.')
+                st.caption(t('no_group_data'))
 
 st.divider()
 

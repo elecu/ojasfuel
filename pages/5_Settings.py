@@ -22,20 +22,20 @@ st.title(f"⚙️ {t('settings')}")
 s = st.session_state['settings']
 
 # ── Appearance / Theme ───────────────────────────────────────────────────────
-st.subheader('Appearance')
+st.subheader(t('appearance'))
 
 current_theme = st.session_state.get('theme', 'dark')
 theme_col, _ = st.columns([2, 3])
 with theme_col:
-    st.markdown('<p class="theme-toggle-label">Color Theme</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="theme-toggle-label">{t("color_theme")}</p>', unsafe_allow_html=True)
     theme_choice = st.radio(
-        'Color Theme',
-        options=['Dark', 'Light'],
+        t('color_theme'),
+        options=[t('theme_dark'), t('theme_light')],
         index=0 if current_theme == 'dark' else 1,
         horizontal=True,
         label_visibility='collapsed',
     )
-    new_theme = 'dark' if theme_choice == 'Dark' else 'light'
+    new_theme = 'dark' if theme_choice == t('theme_dark') else 'light'
     if new_theme != current_theme:
         st.session_state['theme'] = new_theme
         st.rerun()
@@ -50,34 +50,23 @@ st.subheader(t('country_filter'))
 # tags = used for client-side post-filter on countries_tags metadata
 COUNTRIES = {
     'All countries':          {'tags': [],                         'cc': None},
+    '🇲🇽 Mexico (SMAE)':     {'tags': ['en:mexico'],              'cc': 'mx'},
+    '🇺🇸 United States':     {'tags': ['en:united-states'],       'cc': 'us'},
     '🇬🇧 United Kingdom':    {'tags': ['en:united-kingdom'],      'cc': 'gb'},
     '🇪🇸 Spain':             {'tags': ['en:spain'],               'cc': 'es'},
     '🇫🇷 France':            {'tags': ['en:france'],              'cc': 'fr'},
     '🇩🇪 Germany':           {'tags': ['en:germany'],             'cc': 'de'},
     '🇮🇹 Italy':             {'tags': ['en:italy'],               'cc': 'it'},
-    '🇺🇸 United States':     {'tags': ['en:united-states'],       'cc': 'us'},
-    '🇲🇽 Mexico':            {'tags': ['en:mexico'],              'cc': 'mx'},
-    '🇦🇷 Argentina':         {'tags': ['en:argentina'],           'cc': 'ar'},
-    '🇨🇴 Colombia':          {'tags': ['en:colombia'],            'cc': 'co'},
-    '🇨🇱 Chile':             {'tags': ['en:chile'],               'cc': 'cl'},
-    '🇵🇪 Peru':              {'tags': ['en:peru'],                'cc': 'pe'},
-    '🇧🇷 Brazil':            {'tags': ['en:brazil'],              'cc': 'br'},
-    '🇨🇦 Canada':            {'tags': ['en:canada'],              'cc': 'ca'},
-    '🇦🇺 Australia':         {'tags': ['en:australia'],           'cc': 'au'},
     '🇳🇱 Netherlands':       {'tags': ['en:netherlands'],         'cc': 'nl'},
     '🇧🇪 Belgium':           {'tags': ['en:belgium'],             'cc': 'be'},
     '🇨🇭 Switzerland':       {'tags': ['en:switzerland'],         'cc': 'ch'},
     '🇵🇹 Portugal':          {'tags': ['en:portugal'],            'cc': 'pt'},
     '🇵🇱 Poland':            {'tags': ['en:poland'],              'cc': 'pl'},
-    # Regional groups use world API (no single cc) but still client-filter by tags
+    # Regional group
     '🌍 Europe (all)':        {'tags': [
         'en:united-kingdom','en:france','en:germany','en:italy','en:spain',
         'en:netherlands','en:belgium','en:switzerland','en:portugal','en:poland',
         'en:austria','en:sweden','en:denmark','en:norway','en:finland',
-    ], 'cc': None},
-    '🌎 Latin America (all)': {'tags': [
-        'en:mexico','en:argentina','en:colombia','en:chile','en:peru',
-        'en:brazil','en:venezuela','en:ecuador','en:bolivia','en:uruguay',
     ], 'cc': None},
 }
 
@@ -102,9 +91,9 @@ s['countries'] = COUNTRIES[country_choice]
 
 chosen = COUNTRIES[country_choice]
 if chosen['cc']:
-    st.caption(f"🌐 Search on **{country_choice.split(' ', 1)[-1]}** OFF database  |  client-filter by country tag")
+    st.caption(t('country_search_msg', country=country_choice.split(' ', 1)[-1]))
 elif chosen['tags']:
-    st.caption(f"Client-side filter only (no single country API for regional groups)")
+    st.caption(t('client_filter_only'))
 else:
     st.caption(t('country_all'))
 
@@ -145,13 +134,13 @@ st.subheader(t('dairy_variants'))
 col1, col2, col3 = st.columns(3)
 with col1:
     s['lacto'] = st.checkbox(t('lacto'), value=s.get('lacto', False),
-                              help='Lacto-vegetarian: dairy OK, no eggs')
+                              help=t('lacto_help'))
 with col2:
     s['ovo'] = st.checkbox(t('ovo'), value=s.get('ovo', False),
-                            help='Ovo-vegetarian: eggs OK, no dairy')
+                            help=t('ovo_help'))
 with col3:
     s['ovo_lacto'] = st.checkbox(t('ovo_lacto'), value=s.get('ovo_lacto', False),
-                                  help='Both dairy and eggs OK')
+                                  help=t('ovo_lacto_help'))
 
 s['strict_egg_traces'] = st.checkbox(
     t('strict_egg_traces'),
@@ -176,7 +165,7 @@ with col_b:
     s['jain'] = st.checkbox(
         t('jain'),
         value=s.get('jain', False),
-        help='Jain diet avoids root/underground vegetables + alliums',
+        help=t('jain_help'),
     )
 
 st.divider()

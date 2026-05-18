@@ -100,7 +100,7 @@ try:
     _np = np
     _Image = Image
 except ImportError:
-    st.error('Pillow / numpy not installed. Run: pip install Pillow numpy')
+    st.error(t('pillow_numpy_missing'))
     st.stop()
 
 try:
@@ -130,7 +130,27 @@ if st.button(t('back')):
 st.title(f"📷 {t('photo_upload')}")
 
 # ── Live barcode scanner component ────────────────────────────────────────────
-SCANNER_HTML = """
+import os as _os, tempfile as _tempfile
+
+_SCANNER_COMPONENT_DIR = _os.path.join(_tempfile.gettempdir(), 'ojsfuel_barcode_scanner')
+_os.makedirs(_SCANNER_COMPONENT_DIR, exist_ok=True)
+
+def _build_scanner_html() -> str:
+    """Build the scanner HTML with translated JS strings."""
+    _js_init_camera      = t('init_camera')
+    _js_scanning         = t('scanning_barcode_js')
+    _js_detected         = t('barcode_detected_js')
+    _js_camera_error     = t('camera_error_js')
+    _js_barcode_detected_label = t('detected_barcode')
+    return _SCANNER_HTML_TEMPLATE.format(
+        js_init_camera=_js_init_camera,
+        js_scanning=_js_scanning,
+        js_detected=_js_detected,
+        js_camera_error=_js_camera_error,
+        js_barcode_detected_label=_js_barcode_detected_label,
+    )
+
+_SCANNER_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -324,16 +344,23 @@ SCANNER_HTML = """
 
 <div id="status-bar">
   <div id="status-dot"></div>
-  <div id="status">Initializing camera...</div>
+  <div id="status">{js_init_camera}</div>
 </div>
 
 <div id="result">
-  <div id="result-label">Barcode Detected</div>
+  <div id="result-label">{js_barcode_detected_label}</div>
   <div id="result-code"></div>
 </div>
 
 <script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
 <script>
+// Notify Streamlit this component is ready
+window.parent.postMessage({
+  isStreamlitMessage: true,
+  type: 'streamlit:componentReady',
+  apiVersion: 1,
+}, '*');
+
 (async () => {
   const video  = document.getElementById('video');
   const status = document.getElementById('status');
@@ -357,23 +384,27 @@ SCANNER_HTML = """
       ? devices[devices.length - 1].deviceId
       : undefined;
 
-    setStatus('Scanning for barcode...', 'active');
+    setStatus('{js_scanning}', 'active');
 
     await codeReader.decodeFromVideoDevice(deviceId, 'video', (res, err) => {
       if (res) {
         const barcode = res.getText();
-        setStatus('Barcode detected!', 'success');
+        setStatus('{js_detected}', 'success');
         code.textContent = barcode;
         result.style.display = 'block';
         dot.style.animation = 'none';
         codeReader.reset();
-        const url = new URL(window.parent.location.href);
-        url.searchParams.set('barcode', barcode);
-        setTimeout(() => { window.parent.location.href = url.toString(); }, 600);
+        // Send value back to Streamlit via component messaging
+        window.parent.postMessage({
+          isStreamlitMessage: true,
+          type: 'streamlit:setComponentValue',
+          value: barcode,
+          dataType: 'json',
+        }, '*');
       }
     });
   } catch (e) {
-    setStatus('Camera error: ' + e.message, 'error');
+    setStatus('{js_camera_error}' + e.message, 'error');
     dot.style.animation = 'none';
   }
 })();
@@ -382,18 +413,27 @@ SCANNER_HTML = """
 </html>
 """
 
-# ── Check for barcode from live scanner ───────────────────────────────────────
+# Write scanner HTML to disk so declare_component can serve it
+with open(_os.path.join(_SCANNER_COMPONENT_DIR, 'index.html'), 'w') as _f:
+    _f.write(_build_scanner_html())
+
+_barcode_scanner_component = st.components.v1.declare_component(
+    'barcode_scanner',
+    path=_SCANNER_COMPONENT_DIR,
+)
+
+# ── Check for barcode from live scanner (stored in session_state) ─────────────
 scanned_from_url = st.query_params.get('barcode', '')
 if scanned_from_url:
-    st.success(f"📸 Barcode scanned: **{scanned_from_url}**")
-    if st.button('Clear scan & scan again'):
+    st.success(t('barcode_scanned_msg', code=scanned_from_url))
+    if st.button(t('clear_and_rescan')):
         st.query_params.clear()
         st.rerun()
 
 st.divider()
 
 # ── Image source ──────────────────────────────────────────────────────────────
-MODE_LIVE = '📡 Live Scan'
+MODE_LIVE = t('mode_live_scan')
 MODE_UPLOAD = t('upload_file')
 MODE_PHOTO = t('take_photo')
 
@@ -403,10 +443,21 @@ img_data = None
 detected_barcode = scanned_from_url or None
 
 if source == MODE_LIVE:
-    st.components.v1.html(SCANNER_HTML, height=420, scrolling=False)
-    if not scanned_from_url:
-        st.info('Point camera at barcode — it will be detected automatically.')
-    st.stop()
+    scanned_live = _barcode_scanner_component(key='live_barcode', default=None)
+    if scanned_live:
+        st.session_state['live_barcode_result'] = scanned_live
+        st.rerun()
+    live_result = st.session_state.get('live_barcode_result')
+    if live_result:
+        st.success(t('barcode_scanned_msg', code=live_result))
+        detected_barcode = live_result
+        if st.button(t('clear_and_rescan')):
+            st.session_state.pop('live_barcode_result', None)
+            st.rerun()
+    else:
+        st.info(t('point_camera_hint'))
+    if not detected_barcode:
+        st.stop()
 elif source == MODE_PHOTO:
     cam = st.camera_input(t('take_photo'))
     if cam:
@@ -420,7 +471,7 @@ if not img_data:
     st.stop()
 
 pil_img = _Image.open(io.BytesIO(img_data)).convert('RGB')
-st.image(pil_img, caption='Uploaded image', use_column_width=False, width=400)
+st.image(pil_img, caption=t('uploaded_image_caption'), use_column_width=False, width=400)
 img_array = _np.array(pil_img)
 
 st.divider()
@@ -462,7 +513,7 @@ if not detected_barcode:
             st.info(t('libzbar_missing'))
     else:
         st.info(t('pyzbar_missing'))
-        manual_barcode = st.text_input('Enter barcode manually')
+        manual_barcode = st.text_input(t('enter_barcode_manual'))
         if manual_barcode.strip():
             detected_barcode = manual_barcode.strip()
 
@@ -471,13 +522,13 @@ if detected_barcode:
     with st.spinner(t('searching')):
         found = search_by_barcode(detected_barcode)
     if found:
-        st.success(f"Found: **{found.get('name','')}** — {found.get('brand','')}")
-        if st.button('Go to product detail'):
+        st.success(t('product_found_msg', name=found.get('name', ''), brand=found.get('brand', '')))
+        if st.button(t('go_to_detail')):
             st.session_state['selected_product'] = found
             st.session_state['portion_product'] = found
             st.switch_page('pages/1_Detail.py')
     else:
-        st.warning(f"Barcode {detected_barcode} not found in Open Food Facts — you can upload it below.")
+        st.warning(t('barcode_not_found_upload', code=detected_barcode))
 
 st.divider()
 
@@ -486,9 +537,9 @@ ocr_ingredients = ''
 ocr_nutrients = ''
 
 if _easyocr_ok:
-    with st.expander('🔍 Run OCR (slow on first run — downloads models ~1GB)'):
-        if st.button('Run OCR on this image'):
-            with st.spinner('Running OCR... (first run may take several minutes)'):
+    with st.expander(t('ocr_expander_label')):
+        if st.button(t('run_ocr_button')):
+            with st.spinner(t('ocr_running')):
                 try:
                     reader = _easyocr.Reader(['en'], gpu=False)
                     ocr_results = reader.readtext(img_array, detail=0)
@@ -503,9 +554,9 @@ if _easyocr_ok:
                     ocr_nutrients = '\n'.join(nutr_lines)
                     st.session_state['ocr_ingredients'] = ocr_ingredients
                     st.session_state['ocr_nutrients'] = ocr_nutrients
-                    st.success('OCR complete')
+                    st.success(t('ocr_complete'))
                 except Exception as e:
-                    st.error(f"OCR error: {e}")
+                    st.error(t('ocr_error', err=str(e)))
 
     ocr_ingredients = st.session_state.get('ocr_ingredients', '')
     ocr_nutrients = st.session_state.get('ocr_nutrients', '')
@@ -518,26 +569,26 @@ st.divider()
 st.subheader(t('edit_before_upload'))
 
 product_name_input = st.text_input(
-    'Product name',
+    t('product_name_label'),
     value='' if not detected_barcode else (
         st.session_state.get('selected_product', {}) or {}
     ).get('name', ''),
 )
-brand_input = st.text_input('Brand')
-barcode_input = st.text_input('Barcode / EAN', value=detected_barcode or '')
+brand_input = st.text_input(t('brand'))
+barcode_input = st.text_input(t('barcode_ean'), value=detected_barcode or '')
 
 ingredients_input = st.text_area(
     t('ocr_ingredients'),
     value=ocr_ingredients,
     height=120,
-    help='Edit detected ingredients or paste them manually',
+    help=t('edit_ingredients_help'),
 )
 
 nutrients_input = st.text_area(
     t('ocr_nutrients'),
     value=ocr_nutrients,
     height=120,
-    help='Edit detected nutrition table text',
+    help=t('edit_nutrition_help'),
 )
 
 # ── Translate ─────────────────────────────────────────────────────────────────
@@ -553,13 +604,13 @@ if ingredients_input.strip():
                 st.error(f"Translation error: {e}")
 
     if st.session_state.get('translated_ingredients'):
-        st.info('Translated:')
+        st.info(t('translated_label'))
         translated_text = st.text_area(
-            'Translated ingredients',
+            t('translated_ingredients_label'),
             value=st.session_state['translated_ingredients'],
             height=100,
         )
-        if st.button('Use translated version'):
+        if st.button(t('use_translated')):
             ingredients_input = translated_text
 
 st.divider()
@@ -568,17 +619,17 @@ st.divider()
 st.subheader(t('upload_to_off'))
 st.info(t('off_login_required'))
 
-with st.expander('Login & Upload'):
+with st.expander(t('login_upload_expander')):
     off_user = st.text_input(t('off_username'))
     off_pass = st.text_input(t('off_password'), type='password')
 
     if st.button(t('upload_to_off'), type='primary'):
         if not off_user or not off_pass:
-            st.error('Please enter your Open Food Facts username and password.')
+            st.error(t('off_login_msg'))
         elif not barcode_input.strip():
-            st.error('Barcode is required to upload.')
+            st.error(t('barcode_required_upload'))
         else:
-            with st.spinner('Uploading...'):
+            with st.spinner(t('uploading')):
                 try:
                     import requests
                     payload = {
@@ -598,7 +649,7 @@ with st.expander('Login & Upload'):
                     data = resp.json()
                     if data.get('status') == 1:
                         st.success(t('upload_success'))
-                        st.markdown(f"[View product](https://world.openfoodfacts.org/product/{barcode_input.strip()})")
+                        st.markdown(f"[{t('view_product_link')}](https://world.openfoodfacts.org/product/{barcode_input.strip()})")
                     else:
                         st.error(t('upload_failed', err=data.get('status_verbose', 'Unknown error')))
                 except Exception as e:
