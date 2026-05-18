@@ -241,3 +241,27 @@ with col_logo:
         f'<img src="{off_logo}" width="140"></a>',
         unsafe_allow_html=True,
     )
+
+st.write('')
+st.markdown(
+    f"""
+    <div style="margin-top:0.5rem;">
+        <p style="margin-bottom:0.75rem;color:var(--text-secondary);font-size:0.95rem;">
+            {t('support_text')}
+        </p>
+        <a href="https://buymeacoffee.com/cowboyedwin" target="_blank"
+           style="display:inline-block;
+                  background:#FFDD00;
+                  color:#000000;
+                  font-weight:700;
+                  font-size:0.95rem;
+                  padding:0.55rem 1.4rem;
+                  border-radius:12px;
+                  text-decoration:none;
+                  letter-spacing:0.02em;">
+            {t('support_btn')}
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)

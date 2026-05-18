@@ -21,14 +21,14 @@ _CSS_DARK = """
     --bg-secondary:    #111118;
     --bg-surface:      #16161f;
     --bg-elevated:     #1c1c28;
-    --accent:          #00d4ff;
-    --accent-dim:      rgba(0, 212, 255, 0.12);
-    --accent-glow:     rgba(0, 212, 255, 0.25);
+    --accent:          #00e676;
+    --accent-dim:      rgba(0, 230, 118, 0.12);
+    --accent-glow:     rgba(0, 230, 118, 0.25);
     --text-primary:    #f0f0f5;
     --text-secondary:  #9898b0;
     --text-muted:      #55556a;
     --border:          rgba(255, 255, 255, 0.06);
-    --border-accent:   rgba(0, 212, 255, 0.30);
+    --border-accent:   rgba(0, 230, 118, 0.30);
     --success:         #00ff9d;
     --success-bg:      rgba(0, 255, 157, 0.08);
     --warning:         #ffb830;
@@ -41,7 +41,7 @@ _CSS_DARK = """
     --radius-md:       12px;
     --radius-lg:       16px;
     --shadow:          0 4px 24px rgba(0,0,0,0.4);
-    --shadow-accent:   0 0 20px rgba(0, 212, 255, 0.15);
+    --shadow-accent:   0 0 20px rgba(0, 230, 118, 0.15);
     --transition:      0.25s ease;
 }
 """
@@ -52,14 +52,14 @@ _CSS_LIGHT = """
     --bg-secondary:    #f2f2f8;
     --bg-surface:      #ebebf5;
     --bg-elevated:     #ffffff;
-    --accent:          #0099cc;
-    --accent-dim:      rgba(0, 153, 204, 0.10);
-    --accent-glow:     rgba(0, 153, 204, 0.20);
+    --accent:          #16a34a;
+    --accent-dim:      rgba(22, 163, 74, 0.10);
+    --accent-glow:     rgba(22, 163, 74, 0.20);
     --text-primary:    #1a1a2e;
     --text-secondary:  #4a4a6a;
     --text-muted:      #8888a8;
     --border:          rgba(0, 0, 0, 0.08);
-    --border-accent:   rgba(0, 153, 204, 0.30);
+    --border-accent:   rgba(22, 163, 74, 0.30);
     --success:         #008060;
     --success-bg:      rgba(0, 128, 96, 0.08);
     --warning:         #b86000;
@@ -72,7 +72,7 @@ _CSS_LIGHT = """
     --radius-md:       12px;
     --radius-lg:       16px;
     --shadow:          0 4px 16px rgba(0,0,0,0.08);
-    --shadow-accent:   0 0 16px rgba(0, 153, 204, 0.12);
+    --shadow-accent:   0 0 16px rgba(22, 163, 74, 0.12);
     --transition:      0.25s ease;
 }
 """
@@ -426,6 +426,14 @@ hr, [data-testid="stDivider"] hr {
     letter-spacing: 0.06em;
     color: var(--text-secondary);
     margin-bottom: 0.25rem;
+}
+
+/* ── Hide Streamlit toolbar (Share / Star / Edit / GitHub / Menu) ──────── */
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+#MainMenu {
+    visibility: hidden !important;
+    height: 0 !important;
 }
 """
 

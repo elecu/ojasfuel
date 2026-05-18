@@ -157,6 +157,8 @@ _EN = {
     'data_source_text': 'All product data sourced from [Open Food Facts](https://world.openfoodfacts.org/) — [Open Database Licence (ODbL)](https://opendatacommons.org/licenses/odbl/)',
     'disclaimer': 'This app is not affiliated with Open Food Facts.',
     'off_credit': '© Open Food Facts contributors',
+    'support_text': 'Is OjasFuel useful to you? Support the project!',
+    'support_btn': '☕ Buy me a protein shake',
 
     # Contribute page
     'contribute_button': '➕ Add this product to Open Food Facts',
@@ -328,6 +330,8 @@ _ES = {
     'data_source_text': 'Todos los datos de productos provienen de [Open Food Facts](https://world.openfoodfacts.org/) — [Licencia Open Database (ODbL)](https://opendatacommons.org/licenses/odbl/)',
     'disclaimer': 'Esta aplicación no está afiliada con Open Food Facts.',
     'off_credit': '© Contribuidores de Open Food Facts',
+    'support_text': '¿Te está siendo útil OjasFuel? Puedes apoyar el proyecto con un cafecito ☕',
+    'support_btn': '☕ Buy me a coffee',
 
     # Contribute page
     'contribute_button': '➕ Agregar este producto a Open Food Facts',
