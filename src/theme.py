@@ -96,7 +96,6 @@ html, body, [data-testid="stAppViewContainer"],
 [data-testid="stMain"] > div,
 .main .block-container {
     background-color: var(--bg-primary) !important;
-    padding-top: 0.75rem;
 }
 
 /* Sidebar */
@@ -438,6 +437,19 @@ hr, [data-testid="stDivider"] hr {
     visibility: hidden !important;
     height: 0 !important;
     display: none !important;
+}
+
+/* ── Remove space reserved for the hidden header ──────────────────────── */
+[data-testid="stAppViewContainer"] > section:first-child,
+[data-testid="stAppViewContainer"] > [data-testid="stMain"],
+.appview-container > section,
+.main > div:first-child {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+.block-container {
+    padding-top: 1rem !important;
+    margin-top: 0 !important;
 }
 """
 
