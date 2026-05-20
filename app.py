@@ -263,83 +263,28 @@ window.parent.postMessage({
                          : cls === 'error'   ? '0 0 6px #ff4d6d' : '0 0 6px #00d4ff';
   };
 
-  let detected = false;
-  const canvas = document.createElement('canvas');
-  const ctx    = canvas.getContext('2d');
-
-  function processFrame() {
-    if (detected || video.readyState < 2) { requestAnimationFrame(processFrame); return; }
-
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imgData.data;
-    const blockSize = 32;
-    const w = canvas.width, h = canvas.height;
-
-    // Pass 1: grayscale
-    const gray = new Uint8Array(w * h);
-    for (let i = 0, j = 0; i < d.length; i += 4, j++) {
-      gray[j] = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-    }
-
-    // Pass 2: local contrast normalization (immune to uneven lighting/shadows)
-    for (let by = 0; by < h; by += blockSize) {
-      for (let bx = 0; bx < w; bx += blockSize) {
-        let min = 255, max = 0;
-        for (let y = by; y < Math.min(by + blockSize, h); y++) {
-          for (let x = bx; x < Math.min(bx + blockSize, w); x++) {
-            const v = gray[y * w + x];
-            if (v < min) min = v;
-            if (v > max) max = v;
-          }
-        }
-        const range = max - min || 1;
-        for (let y = by; y < Math.min(by + blockSize, h); y++) {
-          for (let x = bx; x < Math.min(bx + blockSize, w); x++) {
-            const idx = (y * w + x) * 4;
-            const norm = ((gray[y * w + x] - min) / range) * 255;
-            d[idx] = d[idx+1] = d[idx+2] = norm;
-            d[idx+3] = 255;
-          }
-        }
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-
-    try {
-      const result = reader.decodeFromCanvas(canvas);
-      if (result) {
-        detected = true;
-        const barcode = result.getText();
-        setStatus('{js_detected}', 'success');
-        code.textContent = barcode;
-        resultEl.style.display = 'block';
-        dot.style.animation = 'none';
-        window.parent.postMessage({
-          isStreamlitMessage: true,
-          type: 'streamlit:setComponentValue',
-          value: barcode,
-          dataType: 'json',
-        }, '*');
-        return;
-      }
-    } catch (_) {}
-
-    requestAnimationFrame(processFrame);
-  }
-
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    video.srcObject = stream;
-    video.addEventListener('loadedmetadata', () => {
-      setStatus('{js_scanning}', 'active');
-      requestAnimationFrame(processFrame);
-    });
+    setStatus('{js_scanning}', 'active');
+    await reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+      'video',
+      (res, err) => {
+        if (res) {
+          const barcode = res.getText();
+          setStatus('{js_detected}', 'success');
+          code.textContent = barcode;
+          resultEl.style.display = 'block';
+          dot.style.animation = 'none';
+          reader.reset();
+          window.parent.postMessage({
+            isStreamlitMessage: true,
+            type: 'streamlit:setComponentValue',
+            value: barcode,
+            dataType: 'json',
+          }, '*');
+        }
+      }
+    );
   } catch (e) {
     setStatus('{js_camera_error}' + e.message, 'error');
     dot.style.animation = 'none';
