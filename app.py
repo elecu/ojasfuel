@@ -256,14 +256,9 @@ window.parent.postMessage({
   };
 
   try {
-    const devices  = await ZXing.BrowserCodeReader.listVideoInputDevices();
-    const deviceId = devices.length > 1
-      ? devices[devices.length - 1].deviceId
-      : undefined;
-
     setStatus('{js_scanning}', 'active');
 
-    await codeReader.decodeFromVideoDevice(deviceId, 'video', (res, err) => {
+    await codeReader.decodeFromVideoDevice(undefined, 'video', (res, err) => {
       if (res) {
         const barcode = res.getText();
         setStatus('{js_detected}', 'success');
