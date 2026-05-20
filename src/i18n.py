@@ -186,8 +186,11 @@ _EN = {
     'creator': 'Creator',
     'data_source': 'Data Source',
     'data_source_text': 'All product data sourced from [Open Food Facts](https://world.openfoodfacts.org/) — [Open Database Licence (ODbL)](https://opendatacommons.org/licenses/odbl/)',
+    'data_source_text_mx': 'Food data sourced from [SMAE](https://midietasmae.com.mx/) (Sistema Mexicano de Alimentos Equivalentes) and [Open Food Facts](https://world.openfoodfacts.org/)',
     'disclaimer': 'This app is not affiliated with Open Food Facts.',
+    'disclaimer_mx': 'This app is not affiliated with SMAE or Open Food Facts.',
     'off_credit': '© Open Food Facts contributors',
+    'smae_credit': '© SMAE — Instituto Nacional de Ciencias Médicas y Nutrición Salvador Zubirán',
     'support_text': 'Is OjasFuel useful to you? Support the project!',
     'support_btn': '☕ Buy me a protein shake',
 
@@ -458,8 +461,11 @@ _ES = {
     'creator': 'Creador',
     'data_source': 'Fuente de Datos',
     'data_source_text': 'Todos los datos de productos provienen de [Open Food Facts](https://world.openfoodfacts.org/) — [Licencia Open Database (ODbL)](https://opendatacommons.org/licenses/odbl/)',
+    'data_source_text_mx': 'Datos de alimentos del [SMAE](https://midietasmae.com.mx/) (Sistema Mexicano de Alimentos Equivalentes) y [Open Food Facts](https://world.openfoodfacts.org/)',
     'disclaimer': 'Esta aplicación no está afiliada con Open Food Facts.',
+    'disclaimer_mx': 'Esta aplicación no está afiliada con el SMAE ni con Open Food Facts.',
     'off_credit': '© Contribuidores de Open Food Facts',
+    'smae_credit': '© SMAE — Instituto Nacional de Ciencias Médicas y Nutrición Salvador Zubirán',
     'support_text': '¿Te está siendo útil OjasFuel? Puedes apoyar el proyecto con un cafecito ☕',
     'support_btn': '☕ Buy me a coffee',
 

@@ -4,6 +4,7 @@ OjasFuel — Home / Search page
 
 import streamlit as st
 import sys
+import os as _os, tempfile as _tempfile
 sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 
 from src.i18n import t, init_session, get_lang
@@ -22,6 +23,283 @@ st.set_page_config(
 init_session()
 inject_theme()
 classifier = ProductClassifier()
+
+# ── Live barcode scanner component (ZXing) ────────────────────────────────────
+_SCANNER_COMPONENT_DIR = _os.path.join(_tempfile.gettempdir(), 'ojsfuel_barcode_scanner_home')
+_os.makedirs(_SCANNER_COMPONENT_DIR, exist_ok=True)
+
+_SCANNER_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a0f;
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 12px 8px 16px;
+    color: #f0f0f5;
+  }
+
+  #scanner-container {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    aspect-ratio: 4 / 3;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #0d0d1a;
+    box-shadow: 0 0 40px rgba(0, 230, 118, 0.08), 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 16px;
+  }
+
+  #overlay {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    border-radius: 16px;
+  }
+
+  #vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center,
+      transparent 50%,
+      rgba(0,0,0,0.55) 100%);
+    pointer-events: none;
+    border-radius: 16px;
+  }
+
+  #reticle {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56%; height: 56%;
+    pointer-events: none;
+  }
+  .corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: #00e676;
+    border-style: solid;
+    border-width: 0;
+    border-radius: 3px;
+    transition: opacity 0.3s ease;
+  }
+  .corner.tl { top: 0; left: 0;  border-top-width: 3px; border-left-width: 3px;
+    box-shadow: -2px -2px 8px rgba(0,230,118,0.35); }
+  .corner.tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px;
+    box-shadow: 2px -2px 8px rgba(0,230,118,0.35); }
+  .corner.bl { bottom: 0; left: 0;  border-bottom-width: 3px; border-left-width: 3px;
+    box-shadow: -2px 2px 8px rgba(0,230,118,0.35); }
+  .corner.br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px;
+    box-shadow: 2px 2px 8px rgba(0,230,118,0.35); }
+
+  .scan-line {
+    position: absolute;
+    left: 22%; width: 56%;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(0,212,255,0.5) 20%,
+      #00d4ff 50%,
+      rgba(0,212,255,0.5) 80%,
+      transparent 100%);
+    border-radius: 2px;
+    filter: blur(0.5px);
+    animation: scanMove 2.2s cubic-bezier(0.4,0,0.6,1) infinite;
+    box-shadow: 0 0 8px #00d4ff, 0 0 16px rgba(0,212,255,0.4);
+    pointer-events: none;
+  }
+  @keyframes scanMove {
+    0%   { top: 22%; opacity: 0; }
+    8%   { opacity: 1; }
+    92%  { opacity: 1; }
+    100% { top: 78%; opacity: 0; }
+  }
+
+  #status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+    width: 100%;
+    max-width: 460px;
+  }
+  #status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #00d4ff;
+    box-shadow: 0 0 6px #00d4ff;
+    flex-shrink: 0;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.75); }
+  }
+  #status {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: #a0a0c0;
+    transition: color 0.3s ease;
+  }
+  #status.active  { color: #00d4ff; }
+  #status.success { color: #00e676; }
+  #status.error   { color: #ff4d6d; }
+
+  #result {
+    display: none;
+    margin-top: 16px;
+    width: 100%;
+    max-width: 460px;
+    background: rgba(0, 230, 118, 0.06);
+    border: 1px solid rgba(0, 230, 118, 0.35);
+    border-radius: 14px;
+    padding: 16px 20px;
+    text-align: center;
+    box-shadow: 0 0 24px rgba(0, 230, 118, 0.12), 0 0 48px rgba(0,230,118,0.06);
+    animation: resultIn 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  @keyframes resultIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  #result-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #00e676;
+    margin-bottom: 6px;
+    opacity: 0.75;
+  }
+  #result-code {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #00e676;
+    text-shadow: 0 0 12px rgba(0,230,118,0.5);
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+
+<div id="scanner-container">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+  <div id="vignette"></div>
+  <div id="reticle">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+  <div class="scan-line"></div>
+</div>
+
+<div id="status-bar">
+  <div id="status-dot"></div>
+  <div id="status">{js_init_camera}</div>
+</div>
+
+<div id="result">
+  <div id="result-label">{js_barcode_detected_label}</div>
+  <div id="result-code"></div>
+</div>
+
+<script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
+<script>
+window.parent.postMessage({{
+  isStreamlitMessage: true,
+  type: 'streamlit:componentReady',
+  apiVersion: 1,
+}}, '*');
+
+(async () => {{
+  const video  = document.getElementById('video');
+  const status = document.getElementById('status');
+  const dot    = document.getElementById('status-dot');
+  const result = document.getElementById('result');
+  const code   = document.getElementById('result-code');
+  const codeReader = new ZXing.BrowserMultiFormatReader();
+
+  const setStatus = (text, cls) => {{
+    status.textContent = text;
+    status.className = cls || '';
+    dot.style.background = cls === 'success' ? '#00e676'
+                         : cls === 'error'   ? '#ff4d6d' : '#00d4ff';
+    dot.style.boxShadow  = cls === 'success' ? '0 0 6px #00e676'
+                         : cls === 'error'   ? '0 0 6px #ff4d6d' : '0 0 6px #00d4ff';
+  }};
+
+  try {{
+    const devices  = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const deviceId = devices.length > 1
+      ? devices[devices.length - 1].deviceId
+      : undefined;
+
+    setStatus('{js_scanning}', 'active');
+
+    await codeReader.decodeFromVideoDevice(deviceId, 'video', (res, err) => {{
+      if (res) {{
+        const barcode = res.getText();
+        setStatus('{js_detected}', 'success');
+        code.textContent = barcode;
+        result.style.display = 'block';
+        dot.style.animation = 'none';
+        codeReader.reset();
+        window.parent.postMessage({{
+          isStreamlitMessage: true,
+          type: 'streamlit:setComponentValue',
+          value: barcode,
+          dataType: 'json',
+        }}, '*');
+      }}
+    }});
+  }} catch (e) {{
+    setStatus('{js_camera_error}' + e.message, 'error');
+    dot.style.animation = 'none';
+  }}
+}})();
+</script>
+</body>
+</html>
+"""
+
+def _build_scanner_html() -> str:
+    from src.i18n import t
+    return _SCANNER_HTML_TEMPLATE.format(
+        js_init_camera=t('init_camera'),
+        js_scanning=t('scanning_barcode_js'),
+        js_detected=t('barcode_detected_js'),
+        js_camera_error=t('camera_error_js'),
+        js_barcode_detected_label=t('detected_barcode'),
+    )
+
+with open(_os.path.join(_SCANNER_COMPONENT_DIR, 'index.html'), 'w') as _f:
+    _f.write(_build_scanner_html())
+
+_barcode_scanner_component = st.components.v1.declare_component(
+    'barcode_scanner_home',
+    path=_SCANNER_COMPONENT_DIR,
+)
 
 
 def _is_barcode(query: str) -> bool:
@@ -152,25 +430,11 @@ if scan_clicked:
     st.session_state['show_scanner'] = not st.session_state.get('show_scanner', False)
 
 if st.session_state.get('show_scanner'):
-    st.markdown(f"**{t('scan_barcode_title')}**")
-    st.caption(t('scan_barcode_hint'))
-    camera_image = st.camera_input(label='', label_visibility='collapsed')
-    if camera_image is not None:
-        try:
-            from PIL import Image
-            from pyzbar.pyzbar import decode as zbar_decode
-            img = Image.open(camera_image)
-            barcodes = zbar_decode(img)
-            if barcodes:
-                detected_code = barcodes[0].data.decode('utf-8')
-                st.success(t('barcode_detected', code=detected_code))
-                st.session_state['show_scanner'] = False
-                st.session_state['scanned_barcode'] = detected_code
-                st.rerun()
-            else:
-                st.error(t('barcode_not_detected'))
-        except Exception as e:
-            st.error(f"{t('error')}: {e}")
+    _live_result = _barcode_scanner_component(key='home_live_barcode', default=None)
+    if _live_result and _is_barcode(str(_live_result)):
+        st.session_state['show_scanner'] = False
+        st.session_state['scanned_barcode'] = str(_live_result)
+        st.rerun()
 
 search_clicked = st.button(t('search_button'), type='primary', use_container_width=False)
 

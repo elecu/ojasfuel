@@ -210,9 +210,16 @@ col_info, col_logo = st.columns([3, 1])
 with col_info:
     st.markdown(f"**{t('version')}:** v0.1.0 Beta")
     st.markdown(f"**{t('creator')}:** Edwin Herrera")
-    st.markdown(f"**{t('data_source')}:** {t('data_source_text')}")
-    st.caption(t('disclaimer'))
-    st.caption(t('off_credit'))
+    is_mexico_info = s.get('countries', {}).get('cc') == 'mx'
+    if is_mexico_info:
+        st.markdown(f"**{t('data_source')}:** {t('data_source_text_mx')}")
+        st.caption(t('disclaimer_mx'))
+        st.caption(t('smae_credit'))
+        st.caption(t('off_credit'))
+    else:
+        st.markdown(f"**{t('data_source')}:** {t('data_source_text')}")
+        st.caption(t('disclaimer'))
+        st.caption(t('off_credit'))
 
 with col_logo:
     theme = st.session_state.get('theme', 'dark')
