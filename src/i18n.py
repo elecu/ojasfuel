@@ -249,6 +249,8 @@ _EN = {
     'scanning_barcode_js': 'Scanning for barcode...',
     'barcode_detected_js': 'Barcode detected!',
     'camera_error_js': 'Camera error: ',
+    'js_analyzing_photo': 'Analyzing photo...',
+    'retry_scan': '🔄 Try again',
 
     # Settings page
     'appearance': 'Appearance',
@@ -549,6 +551,8 @@ _ES = {
     'scanning_barcode_js': 'Escaneando código de barras...',
     'barcode_detected_js': '¡Código detectado!',
     'camera_error_js': 'Error de cámara: ',
+    'js_analyzing_photo': 'Analizando foto...',
+    'retry_scan': '🔄 Intentar de nuevo',
 
     # Settings page
     'appearance': 'Apariencia',

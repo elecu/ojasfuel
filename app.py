@@ -263,13 +263,36 @@ window.parent.postMessage({
                          : cls === 'error'   ? '0 0 6px #ff4d6d' : '0 0 6px #00d4ff';
   };
 
+  function capturePhoto() {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.92);
+  }
+
   try {
     setStatus('{js_scanning}', 'active');
+
+    const autoPhotoTimer = setTimeout(() => {
+      reader.reset();
+      const dataUrl = capturePhoto();
+      setStatus('{js_analyzing_photo}', 'active');
+      dot.style.animation = 'none';
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: 'streamlit:setComponentValue',
+        value: 'PHOTO:' + dataUrl,
+        dataType: 'json',
+      }, '*');
+    }, 5000);
+
     await reader.decodeFromConstraints(
       { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
       'video',
       (res, err) => {
         if (res) {
+          clearTimeout(autoPhotoTimer);
           const barcode = res.getText();
           setStatus('{js_detected}', 'success');
           code.textContent = barcode;
@@ -303,6 +326,7 @@ def _build_scanner_html() -> str:
     html = html.replace('{js_detected}', t('barcode_detected_js'))
     html = html.replace('{js_camera_error}', t('camera_error_js'))
     html = html.replace('{js_barcode_detected_label}', t('detected_barcode'))
+    html = html.replace('{js_analyzing_photo}', t('js_analyzing_photo'))
     return html
 
 with open(_os.path.join(_SCANNER_COMPONENT_DIR, 'index.html'), 'w') as _f:
@@ -316,6 +340,29 @@ _barcode_scanner_component = st.components.v1.declare_component(
 
 def _is_barcode(query: str) -> bool:
     return query.strip().isdigit() and 8 <= len(query.strip()) <= 14
+
+
+def _try_decode_pyzbar(img_pil):
+    try:
+        import pyzbar.pyzbar as _pyzbar
+        import cv2 as _cv2
+        import numpy as _np
+        from PIL import Image as _PILImage
+    except ImportError:
+        return []
+    candidates = [img_pil]
+    try:
+        arr = _cv2.cvtColor(_np.array(img_pil), _cv2.COLOR_RGB2GRAY)
+        kernel = _np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+        sharp = _cv2.filter2D(arr, -1, kernel)
+        candidates.append(_PILImage.fromarray(sharp))
+    except Exception:
+        pass
+    for img in candidates:
+        result = _pyzbar.decode(img)
+        if result:
+            return result
+    return []
 
 
 def _diet_tags(product: dict) -> tuple[str, str]:
@@ -442,10 +489,36 @@ if scan_clicked:
     st.session_state['show_scanner'] = not st.session_state.get('show_scanner', False)
 
 if st.session_state.get('show_scanner'):
-    _live_result = _barcode_scanner_component(key='home_live_barcode', default=None, height=420)
-    if _live_result and _is_barcode(str(_live_result)):
-        st.session_state['show_scanner'] = False
-        st.session_state['scanned_barcode'] = str(_live_result)
+    _scanner_key = st.session_state.get('scanner_key', 0)
+    _live_result = _barcode_scanner_component(key=f'home_live_barcode_{_scanner_key}', default=None, height=420)
+    if _live_result:
+        _result_str = str(_live_result)
+        if _result_str.startswith('PHOTO:'):
+            import base64 as _b64, re as _re, io as _io
+            from PIL import Image as _PILImg
+            _data_url = _result_str[6:]
+            _b64_data = _re.sub(r'^data:image/\w+;base64,', '', _data_url)
+            _img_bytes = _b64.b64decode(_b64_data)
+            _pil_img = _PILImg.open(_io.BytesIO(_img_bytes)).convert('RGB')
+            _barcodes = _try_decode_pyzbar(_pil_img)
+            if _barcodes:
+                st.session_state['show_scanner'] = False
+                st.session_state['scanned_barcode'] = _barcodes[0].data.decode('utf-8')
+                st.rerun()
+            else:
+                st.session_state['show_scanner'] = False
+                st.session_state['photo_retry'] = True
+                st.rerun()
+        elif _is_barcode(_result_str):
+            st.session_state['show_scanner'] = False
+            st.session_state['scanned_barcode'] = _result_str
+            st.rerun()
+
+if st.session_state.pop('photo_retry', False):
+    st.warning(t('barcode_not_detected'))
+    if st.button(t('retry_scan')):
+        st.session_state['show_scanner'] = True
+        st.session_state['scanner_key'] = st.session_state.get('scanner_key', 0) + 1
         st.rerun()
 
 search_clicked = st.button(t('search_button'), type='primary', use_container_width=False)

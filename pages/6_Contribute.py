@@ -175,6 +175,23 @@ def _run_ocr_bytes(img_bytes: bytes) -> str:
     return '\n'.join(reader.readtext(_np.array(pil_img), detail=0))
 
 
+def _image_capture(key: str) -> bytes | None:
+    """Radio toggle: camera activates ONLY when user explicitly selects it.
+    Returns image bytes or None."""
+    _is_es = st.session_state.get('lang', 'es') == 'es'
+    opt_cam = '📷 Cámara' if _is_es else '📷 Camera'
+    opt_up  = '📁 Subir imagen' if _is_es else '📁 Upload image'
+    method = st.radio('', [opt_cam, opt_up], horizontal=True, key=f'method_{key}',
+                      label_visibility='collapsed')
+    if method == opt_cam:
+        img = st.camera_input('', key=f'cam_{key}', label_visibility='collapsed')
+        return img.getvalue() if img else None
+    else:
+        img = st.file_uploader('', type=['jpg', 'jpeg', 'png', 'webp'],
+                               key=f'up_{key}', label_visibility='collapsed')
+        return img.read() if img else None
+
+
 # ── Back button ───────────────────────────────────────────────────────────────
 if st.button(t('back')):
     st.switch_page('app.py')
@@ -198,20 +215,8 @@ if 'active_nutrition_keys' not in st.session_state:
 
 # ── Foto del producto ─────────────────────────────────────────────────────────
 st.subheader(t('contribute_photo_title'))
-col_ph1, col_ph2 = st.columns(2)
-with col_ph1:
-    product_photo = st.camera_input(t('contribute_photo_label'), key='cam_product')
-with col_ph2:
-    product_photo_upload = st.file_uploader(
-        t('contribute_photo_upload'), type=['jpg', 'jpeg', 'png', 'webp'], key='up_product'
-    )
-
-_product_photo_bytes = None
-if product_photo is not None:
-    _product_photo_bytes = product_photo.getvalue()
-    st.image(_product_photo_bytes, width=200)
-elif product_photo_upload is not None:
-    _product_photo_bytes = product_photo_upload.read()
+_product_photo_bytes = _image_capture('product')
+if _product_photo_bytes:
     st.image(_product_photo_bytes, width=200)
 
 st.divider()
@@ -228,19 +233,7 @@ tab_single, tab_ingr, tab_nutr = st.tabs([
 # ───────────────────────── TAB 1: Foto única ─────────────────────────────────
 with tab_single:
     st.caption(t('contribute_ocr_single_caption'))
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        single_cam = st.camera_input(t('contribute_photo_label'), key='cam_single')
-    with col_s2:
-        single_up = st.file_uploader(
-            t('contribute_photo_upload'), type=['jpg', 'jpeg', 'png', 'webp'], key='up_single'
-        )
-
-    _single_img = None
-    if single_cam is not None:
-        _single_img = single_cam.getvalue()
-    elif single_up is not None:
-        _single_img = single_up.read()
+    _single_img = _image_capture('single')
 
     if _single_img and _easyocr_ok and _img_ok:
         if st.button(t('contribute_ocr_run'), key='btn_ocr_single'):
@@ -318,19 +311,7 @@ with tab_single:
 # ───────────────────────── TAB 2: Solo ingredientes ──────────────────────────
 with tab_ingr:
     st.caption(t('contribute_ocr_ingredients_caption'))
-    col_i1, col_i2 = st.columns(2)
-    with col_i1:
-        ingr_cam = st.camera_input(t('contribute_photo_label'), key='cam_ingr')
-    with col_i2:
-        ingr_up = st.file_uploader(
-            t('contribute_photo_upload'), type=['jpg', 'jpeg', 'png', 'webp'], key='up_ingr'
-        )
-
-    _ingr_img = None
-    if ingr_cam is not None:
-        _ingr_img = ingr_cam.getvalue()
-    elif ingr_up is not None:
-        _ingr_img = ingr_up.read()
+    _ingr_img = _image_capture('ingr')
 
     if _ingr_img and _easyocr_ok and _img_ok:
         if st.button(t('contribute_ocr_run'), key='btn_ocr_ingr'):
@@ -357,19 +338,7 @@ with tab_ingr:
 # ───────────────────────── TAB 3: Solo nutrición ─────────────────────────────
 with tab_nutr:
     st.caption(t('contribute_ocr_nutrition_caption'))
-    col_n1, col_n2 = st.columns(2)
-    with col_n1:
-        nutr_cam = st.camera_input(t('contribute_photo_label'), key='cam_nutr')
-    with col_n2:
-        nutr_up = st.file_uploader(
-            t('contribute_photo_upload'), type=['jpg', 'jpeg', 'png', 'webp'], key='up_nutr'
-        )
-
-    _nutr_img = None
-    if nutr_cam is not None:
-        _nutr_img = nutr_cam.getvalue()
-    elif nutr_up is not None:
-        _nutr_img = nutr_up.read()
+    _nutr_img = _image_capture('nutr')
 
     if _nutr_img and _easyocr_ok and _img_ok:
         if st.button(t('contribute_ocr_run'), key='btn_ocr_nutr'):
