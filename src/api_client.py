@@ -280,19 +280,26 @@ def submit_product(
     brand: str = '',
     quantity: str = '',
     ingredients: str = '',
+    countries: str = '',
+    nutrition: dict | None = None,
+    photo_bytes: bytes | None = None,
 ) -> dict:
     """Submit a new product to Open Food Facts anonymously.
 
     Returns {'ok': True} on success or {'ok': False, 'error': str} on failure.
     Uses the anonymous OFF account (user_id=off, password=off).
+    nutrition keys must follow OFF format: e.g. 'nutriment_energy-kcal_100g'.
+    photo_bytes is uploaded to the front image field after the main submit.
     """
     import requests
+
+    _headers = {'User-Agent': 'OjasFuel/1.0'}
+    _auth = {'user_id': 'off', 'password': 'off'}
 
     data = {
         'code': barcode.strip(),
         'product_name': name.strip(),
-        'user_id': 'off',
-        'password': 'off',
+        **_auth,
     }
     if brand.strip():
         data['brands'] = brand.strip()
@@ -300,21 +307,40 @@ def submit_product(
         data['quantity'] = quantity.strip()
     if ingredients.strip():
         data['ingredients_text'] = ingredients.strip()
+    if countries.strip():
+        data['countries'] = countries.strip()
+    if nutrition:
+        for key, val in nutrition.items():
+            if val is not None and str(val).strip():
+                data[key] = str(val)
 
     try:
         resp = requests.post(
             'https://world.openfoodfacts.org/cgi/product_jqm2.pl',
             data=data,
             timeout=15,
-            headers={'User-Agent': 'OjasFuel/1.0'},
+            headers=_headers,
         )
         resp.raise_for_status()
         body = resp.json()
-        if body.get('status') == 1:
-            return {'ok': True}
-        return {'ok': False, 'error': body.get('status_verbose', 'Unknown error')}
+        if body.get('status') != 1:
+            return {'ok': False, 'error': body.get('status_verbose', 'Unknown error')}
     except Exception as exc:
         return {'ok': False, 'error': str(exc)}
+
+    if photo_bytes:
+        try:
+            requests.post(
+                'https://world.openfoodfacts.org/cgi/product_image_upload.pl',
+                data={'code': barcode.strip(), 'imagefield': 'front_en', **_auth},
+                files={'imgupload_front_en': ('front.jpg', photo_bytes, 'image/jpeg')},
+                timeout=30,
+                headers=_headers,
+            )
+        except Exception:
+            pass
+
+    return {'ok': True}
 
 
 def search_by_barcode(barcode: str) -> dict | None:

@@ -493,7 +493,7 @@ if (search_clicked and query.strip()) or (auto_search and query.strip()):
         products = _classify_results(products)
         st.session_state['search_results'] = products
         st.success(t('results_count', n=len(products)))
-    elif query.strip():
+    elif query.strip() and not _is_barcode(query.strip()):
         st.session_state['search_results'] = []
         st.session_state['contribute_prefill_name'] = query.strip()
         st.warning(t('no_results'))
