@@ -232,6 +232,12 @@ window.parent.postMessage({
   apiVersion: 1,
 }, '*');
 
+window.parent.postMessage({
+  isStreamlitMessage: true,
+  type: 'streamlit:setFrameHeight',
+  height: 420,
+}, '*');
+
 (async () => {
   const video  = document.getElementById('video');
   const status = document.getElementById('status');
@@ -430,7 +436,7 @@ if scan_clicked:
     st.session_state['show_scanner'] = not st.session_state.get('show_scanner', False)
 
 if st.session_state.get('show_scanner'):
-    _live_result = _barcode_scanner_component(key='home_live_barcode', default=None)
+    _live_result = _barcode_scanner_component(key='home_live_barcode', default=None, height=420)
     if _live_result and _is_barcode(str(_live_result)):
         st.session_state['show_scanner'] = False
         st.session_state['scanned_barcode'] = str(_live_result)
