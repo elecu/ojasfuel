@@ -50,7 +50,7 @@ st.subheader(t('country_filter'))
 # tags = used for client-side post-filter on countries_tags metadata
 COUNTRIES = {
     'All countries':          {'tags': [],                         'cc': None},
-    '🇲🇽 Mexico (SMAE)':     {'tags': ['en:mexico'],              'cc': 'mx'},
+    '🇲🇽 Mexico':            {'tags': ['en:mexico'],              'cc': 'mx'},
     '🇺🇸 United States':     {'tags': ['en:united-states'],       'cc': 'us'},
     '🇬🇧 United Kingdom':    {'tags': ['en:united-kingdom'],      'cc': 'gb'},
     '🇪🇸 Spain':             {'tags': ['en:spain'],               'cc': 'es'},

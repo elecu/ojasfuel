@@ -226,13 +226,13 @@ _SCANNER_HTML_TEMPLATE = """
 
 <script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
 <script>
-window.parent.postMessage({{
+window.parent.postMessage({
   isStreamlitMessage: true,
   type: 'streamlit:componentReady',
   apiVersion: 1,
-}}, '*');
+}, '*');
 
-(async () => {{
+(async () => {
   const video  = document.getElementById('video');
   const status = document.getElementById('status');
   const dot    = document.getElementById('status-dot');
@@ -240,16 +240,16 @@ window.parent.postMessage({{
   const code   = document.getElementById('result-code');
   const codeReader = new ZXing.BrowserMultiFormatReader();
 
-  const setStatus = (text, cls) => {{
+  const setStatus = (text, cls) => {
     status.textContent = text;
     status.className = cls || '';
     dot.style.background = cls === 'success' ? '#00e676'
                          : cls === 'error'   ? '#ff4d6d' : '#00d4ff';
     dot.style.boxShadow  = cls === 'success' ? '0 0 6px #00e676'
                          : cls === 'error'   ? '0 0 6px #ff4d6d' : '0 0 6px #00d4ff';
-  }};
+  };
 
-  try {{
+  try {
     const devices  = await ZXing.BrowserCodeReader.listVideoInputDevices();
     const deviceId = devices.length > 1
       ? devices[devices.length - 1].deviceId
@@ -257,27 +257,27 @@ window.parent.postMessage({{
 
     setStatus('{js_scanning}', 'active');
 
-    await codeReader.decodeFromVideoDevice(deviceId, 'video', (res, err) => {{
-      if (res) {{
+    await codeReader.decodeFromVideoDevice(deviceId, 'video', (res, err) => {
+      if (res) {
         const barcode = res.getText();
         setStatus('{js_detected}', 'success');
         code.textContent = barcode;
         result.style.display = 'block';
         dot.style.animation = 'none';
         codeReader.reset();
-        window.parent.postMessage({{
+        window.parent.postMessage({
           isStreamlitMessage: true,
           type: 'streamlit:setComponentValue',
           value: barcode,
           dataType: 'json',
-        }}, '*');
-      }}
-    }});
-  }} catch (e) {{
+        }, '*');
+      }
+    });
+  } catch (e) {
     setStatus('{js_camera_error}' + e.message, 'error');
     dot.style.animation = 'none';
-  }}
-}})();
+  }
+})();
 </script>
 </body>
 </html>
@@ -285,13 +285,13 @@ window.parent.postMessage({{
 
 def _build_scanner_html() -> str:
     from src.i18n import t
-    return _SCANNER_HTML_TEMPLATE.format(
-        js_init_camera=t('init_camera'),
-        js_scanning=t('scanning_barcode_js'),
-        js_detected=t('barcode_detected_js'),
-        js_camera_error=t('camera_error_js'),
-        js_barcode_detected_label=t('detected_barcode'),
-    )
+    html = _SCANNER_HTML_TEMPLATE
+    html = html.replace('{js_init_camera}', t('init_camera'))
+    html = html.replace('{js_scanning}', t('scanning_barcode_js'))
+    html = html.replace('{js_detected}', t('barcode_detected_js'))
+    html = html.replace('{js_camera_error}', t('camera_error_js'))
+    html = html.replace('{js_barcode_detected_label}', t('detected_barcode'))
+    return html
 
 with open(_os.path.join(_SCANNER_COMPONENT_DIR, 'index.html'), 'w') as _f:
     _f.write(_build_scanner_html())
