@@ -43,6 +43,7 @@ _CSS_DARK = """
     --shadow:          0 4px 24px rgba(0,0,0,0.4);
     --shadow-accent:   0 0 20px rgba(0, 230, 118, 0.15);
     --transition:      0.25s ease;
+    --btn-primary-text: #0a0a0f;
 }
 """
 
@@ -74,6 +75,7 @@ _CSS_LIGHT = """
     --shadow:          0 4px 16px rgba(0,0,0,0.08);
     --shadow-accent:   0 0 16px rgba(22, 163, 74, 0.12);
     --transition:      0.25s ease;
+    --btn-primary-text: #ffffff;
 }
 """
 
@@ -94,7 +96,7 @@ html, body, [data-testid="stAppViewContainer"],
 [data-testid="stMain"] > div,
 .main .block-container {
     background-color: var(--bg-primary) !important;
-    padding-top: 2rem;
+    padding-top: 0.75rem;
 }
 
 /* Sidebar */
@@ -162,7 +164,7 @@ hr, [data-testid="stDivider"] hr {
 [data-testid="stButton"] > button[kind="primary"],
 [data-testid="stButton"] > button[data-baseweb="button"][kind="primary"] {
     background: var(--accent) !important;
-    color: var(--bg-primary) !important;
+    color: var(--btn-primary-text) !important;
     border-color: var(--accent) !important;
     font-weight: 700 !important;
 }
@@ -428,12 +430,14 @@ hr, [data-testid="stDivider"] hr {
     margin-bottom: 0.25rem;
 }
 
-/* ── Hide Streamlit toolbar (Share / Star / Edit / GitHub / Menu) ──────── */
+/* ── Hide Streamlit toolbar and header bar ─────────────────────────────── */
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
+[data-testid="stHeader"],
 #MainMenu {
     visibility: hidden !important;
     height: 0 !important;
+    display: none !important;
 }
 """
 

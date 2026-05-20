@@ -110,11 +110,7 @@ def _classify_results(products: list) -> list:
 # ── Header ──────────────────────────────────────────────────────────────────
 col_title, col_settings = st.columns([5, 1])
 with col_title:
-    logo_col, name_col = st.columns([1, 4], vertical_alignment='center')
-    with logo_col:
-        st.image('logo_icon.png', width=72)
-    with name_col:
-        st.image('logo_text.png', width=220)
+    st.image('logo_text.png', width=200)
     st.caption(t('app_subtitle'))
 with col_settings:
     st.write('')

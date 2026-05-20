@@ -172,7 +172,9 @@ st.divider()
 
 # ── Equivalents threshold ─────────────────────────────────────────────────────
 st.subheader(t('equivalents_threshold'))
-threshold_pct = int(s.get('equivalents_threshold', 0.10) * 100)
+threshold_pct = round(s.get('equivalents_threshold', 0.10) * 100)
+if threshold_pct not in [5, 10, 15, 20]:
+    threshold_pct = 10
 threshold_pct = st.select_slider(
     t('threshold_label', pct=threshold_pct),
     options=[5, 10, 15, 20],
@@ -203,12 +205,6 @@ st.divider()
 # ── About ─────────────────────────────────────────────────────────────────────
 st.subheader(t('about'))
 
-logo_col, name_col = st.columns([1, 5], vertical_alignment='center')
-with logo_col:
-    st.image('logo_icon.png', width=64)
-with name_col:
-    st.image('logo_text.png', width=200)
-
 st.write('')
 col_info, col_logo = st.columns([3, 1])
 with col_info:
@@ -225,11 +221,31 @@ with col_logo:
         if theme == 'dark'
         else "https://static.openfoodfacts.org/images/logos/off-logo-horizontal-light.svg"
     )
-    st.markdown(
-        f'<a href="https://world.openfoodfacts.org" target="_blank">'
-        f'<img src="{off_logo}" width="140"></a>',
-        unsafe_allow_html=True,
-    )
+    is_mexico = s.get('countries', {}).get('cc') == 'mx'
+    if is_mexico:
+        import base64 as _b64
+        _smae_svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160">
+  <text x="10" y="138" font-family="Arial Rounded MT Bold,Arial Black,Helvetica Neue,sans-serif"
+        font-weight="900" font-size="152" fill="#6aaa1e" letter-spacing="-4">smae</text>
+  <text x="448" y="58" font-family="Arial,sans-serif" font-weight="700" font-size="26" fill="#6aaa1e">MR</text>
+  <circle cx="490" cy="44" r="24" fill="none" stroke="#6aaa1e" stroke-width="3"/>
+</svg>"""
+        _smae_b64 = _b64.b64encode(_smae_svg).decode()
+        st.markdown(
+            f'<div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start;">'
+            f'<a href="https://midietasmae.com.mx/" target="_blank">'
+            f'<img src="data:image/svg+xml;base64,{_smae_b64}" style="width:130px;height:auto;"></a>'
+            f'<a href="https://world.openfoodfacts.org" target="_blank">'
+            f'<img src="{off_logo}" style="width:130px;height:auto;"></a>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<a href="https://world.openfoodfacts.org" target="_blank">'
+            f'<img src="{off_logo}" width="140"></a>',
+            unsafe_allow_html=True,
+        )
 
 st.write('')
 st.markdown(
