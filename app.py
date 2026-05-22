@@ -581,7 +581,13 @@ if _no_results_after_search or st.session_state.get('contribute_prefill_barcode'
     st.divider()
     st.caption('🔍 ' + t('not_found_prompt'))
     if st.button(t('contribute_button'), key='btn_contribute'):
-        st.switch_page('pages/6_Contribute.py')
+        st.session_state['_navigate_to_contribute'] = True
+        st.rerun()
+
+# Handle navigation to contribute page (top-level logic)
+if st.session_state.get('_navigate_to_contribute'):
+    st.session_state.pop('_navigate_to_contribute', None)
+    st.switch_page('pages/6_Contribute.py')
 
 # ── Results ──────────────────────────────────────────────────────────────────
 results = st.session_state.get('search_results', [])

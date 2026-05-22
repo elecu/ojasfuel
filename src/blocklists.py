@@ -247,3 +247,98 @@ JAIN_EXTRAS = [
     r'\bkartoffel\b', r'\bmöhre\b', r'\brote bete\b',
     r'\bingwer\b', r'\bgelbwurz\b',
 ]
+
+ALLERGIES_NUTS = [
+    r'\btree nut\b', r'\btree nuts\b',
+    r'\balmond\b', r'\balmonds\b',
+    r'\bwalnut\b', r'\bwalnuts\b',
+    r'\bcashew\b', r'\bcashews\b',
+    r'\bpistachio\b', r'\bpistachios\b',
+    r'\bhazelnut\b', r'\bhazelnuts\b',
+    r'\bpecan\b', r'\bpecans\b',
+    r'\bmacadamia\b', r'\bbrazil nut\b',
+    r'\bpine nut\b', r'\bpine nuts\b',
+    # Spanish
+    r'\bfruto seco\b', r'\bfrutos secos\b',
+    r'\balmendra\b', r'\bnuez\b', r'\bpistacho\b',
+    r'\bavellana\b', r'\bcastaña\b',
+    # French
+    r'\bnoix\b', r'\bamande\b', r'\bnoisette\b',
+    # German
+    r'\bnussbaum\b', r'\bmandel\b', r'\bhasel\b',
+]
+
+ALLERGIES_PEANUTS = [
+    r'\bpeanut\b', r'\bpeanuts\b',
+    r'\barachis oil\b',
+    r'\bpeanut oil\b', r'\bgroundnut\b', r'\bgroundnuts\b',
+    # Spanish
+    r'\bcacahuete\b', r'\bcacahuetes\b',
+    r'\bmaní\b', r'\bmanís\b',
+    # French
+    r'\barachide\b',
+    # German
+    r'\berbse\b', r'\berdnuss\b',
+]
+
+ALLERGIES_SOY = [
+    r'\bsoy\b', r'\bsoybeans?\b', r'\bsoya\b',
+    r'\btofu\b', r'\btempeh\b', r'\bmiso\b',
+    r'\bsoy sauce\b', r'\bshoyu\b', r'\btamari\b',
+    r'\bsoy lecithin\b', r'\bsoya lecithin\b',
+    r'\bsoy milk\b', r'\bsoya milk\b',
+    r'\bsoy protein\b', r'\bsoya protein\b',
+    r'\bedamame\b',
+    # Spanish
+    r'\bsoja\b', r'\bsoybean\b',
+    r'\btofu\b', r'\bsalsa de soja\b',
+    # French
+    r'\bsoja\b', r'\btofu\b',
+    # German
+    r'\bsoja\b', r'\bsojaschrot\b',
+]
+
+ALLERGIES_MUSTARD = [
+    r'\bmustard\b',
+    r'\bmustard seed\b', r'\bmustard powder\b',
+    r'\bmustard oil\b', r'\bmustard extract\b',
+    # Spanish
+    r'\bmostaza\b',
+    # French
+    r'\bmoutarde\b',
+    # German
+    r'\bsenf\b',
+]
+
+ALLERGIES_SESAME = [
+    r'\bsesame\b', r'\bsesames\b',
+    r'\bsesame seed\b', r'\bsesame seeds\b',
+    r'\bsesame oil\b', r'\bsesame paste\b',
+    r'\btahini\b', r'\bsesamoidin\b',
+    # Spanish
+    r'\bajonjolí\b', r'\bsésamo\b',
+    # French
+    r'\bsésame\b',
+    # German
+    r'\bsesamöl\b',
+]
+
+ALLERGIES_GLUTEN = [
+    r'\bgluten\b', r'\bwheat\b',
+    r'\bbarley\b', r'\brye\b', r'\boats?\b',
+    r'\bspelt\b', r'\bkamut\b', r'\beinkorn\b',
+    r'\bgluten free\b',  # To flag that gluten is a concern
+    r'\bwheat flour\b', r'\bwheat starch\b',
+    r'\bbarley malt\b', r'\bbarley extract\b',
+    r'\brye flour\b', r'\boat flour\b',
+    r'\bCeliac\b', r'\bCoeliac\b',
+    # Spanish
+    r'\bgluten\b', r'\btrigo\b', r'\bcebada\b',
+    r'\bcenteno\b', r'\bavena\b',
+    # French
+    r'\bblé\b', r'\borge\b', r'\bseigle\b',
+    r'\bavoine\b',
+    # German
+    r'\bweizen\b', r'\bgerste\b', r'\broggn\b',
+    r'\bhafer\b',
+]

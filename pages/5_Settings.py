@@ -151,22 +151,35 @@ s['strict_egg_traces'] = st.checkbox(
 st.divider()
 
 # ── Additional restrictions ───────────────────────────────────────────────────
-st.subheader(t('extra_restrictions'))
+with st.expander(t('extra_restrictions'), expanded=False):
+    col_a, col_b = st.columns(2)
+    with col_a:
+        s['no_garlic'] = st.checkbox(t('no_garlic'), value=s.get('no_garlic', False))
+        s['no_onion'] = st.checkbox(t('no_onion'), value=s.get('no_onion', False))
+        s['no_caffeine'] = st.checkbox(t('no_caffeine'), value=s.get('no_caffeine', False))
+        s['no_alcohol'] = st.checkbox(t('no_alcohol'), value=s.get('no_alcohol', False))
+    with col_b:
+        s['no_mushrooms'] = st.checkbox(t('no_mushrooms'), value=s.get('no_mushrooms', False))
+        s['no_gelatin'] = st.checkbox(t('no_gelatin'), value=s.get('no_gelatin', False))
+        s['jain'] = st.checkbox(
+            t('jain'),
+            value=s.get('jain', False),
+            help=t('jain_help'),
+        )
 
-col_a, col_b = st.columns(2)
-with col_a:
-    s['no_garlic'] = st.checkbox(t('no_garlic'), value=s.get('no_garlic', False))
-    s['no_onion'] = st.checkbox(t('no_onion'), value=s.get('no_onion', False))
-    s['no_caffeine'] = st.checkbox(t('no_caffeine'), value=s.get('no_caffeine', False))
-    s['no_alcohol'] = st.checkbox(t('no_alcohol'), value=s.get('no_alcohol', False))
-with col_b:
-    s['no_mushrooms'] = st.checkbox(t('no_mushrooms'), value=s.get('no_mushrooms', False))
-    s['no_gelatin'] = st.checkbox(t('no_gelatin'), value=s.get('no_gelatin', False))
-    s['jain'] = st.checkbox(
-        t('jain'),
-        value=s.get('jain', False),
-        help=t('jain_help'),
-    )
+st.divider()
+
+# ── Allergies ──────────────────────────────────────────────────────────────────
+with st.expander(t('allergies'), expanded=False):
+    col_a, col_b = st.columns(2)
+    with col_a:
+        s['allergies_nuts'] = st.checkbox(t('allergies_nuts'), value=s.get('allergies_nuts', False))
+        s['allergies_peanuts'] = st.checkbox(t('allergies_peanuts'), value=s.get('allergies_peanuts', False))
+        s['allergies_soy'] = st.checkbox(t('allergies_soy'), value=s.get('allergies_soy', False))
+    with col_b:
+        s['allergies_mustard'] = st.checkbox(t('allergies_mustard'), value=s.get('allergies_mustard', False))
+        s['allergies_sesame'] = st.checkbox(t('allergies_sesame'), value=s.get('allergies_sesame', False))
+        s['allergies_gluten'] = st.checkbox(t('allergies_gluten'), value=s.get('allergies_gluten', False))
 
 st.divider()
 

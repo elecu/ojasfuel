@@ -7,6 +7,8 @@ import re
 from src.blocklists import (
     MEAT_FISH, DAIRY, EGGS, EGGS_TRACES, GELATIN, HONEY,
     ALCOHOL, CAFFEINE, MUSHROOMS, ONION, GARLIC, JAIN_EXTRAS,
+    ALLERGIES_NUTS, ALLERGIES_PEANUTS, ALLERGIES_SOY,
+    ALLERGIES_MUSTARD, ALLERGIES_SESAME, ALLERGIES_GLUTEN,
 )
 
 
@@ -153,6 +155,37 @@ class ProductClassifier:
                 violations.append(f"Jain diet: contains garlic")
             if onion_m:
                 violations.append(f"Jain diet: contains onion")
+
+        # Allergies
+        if filters.get('allergies_nuts'):
+            matches = _find_matches(text, ALLERGIES_NUTS)
+            if matches:
+                violations.append(f"Tree nut allergy: {', '.join(matches[:2])}")
+
+        if filters.get('allergies_peanuts'):
+            matches = _find_matches(text, ALLERGIES_PEANUTS)
+            if matches:
+                violations.append(f"Peanut allergy: {', '.join(matches[:2])}")
+
+        if filters.get('allergies_soy'):
+            matches = _find_matches(text, ALLERGIES_SOY)
+            if matches:
+                violations.append(f"Soy allergy: {', '.join(matches[:2])}")
+
+        if filters.get('allergies_mustard'):
+            matches = _find_matches(text, ALLERGIES_MUSTARD)
+            if matches:
+                violations.append(f"Mustard allergy: {', '.join(matches[:2])}")
+
+        if filters.get('allergies_sesame'):
+            matches = _find_matches(text, ALLERGIES_SESAME)
+            if matches:
+                violations.append(f"Sesame allergy: {', '.join(matches[:2])}")
+
+        if filters.get('allergies_gluten'):
+            matches = _find_matches(text, ALLERGIES_GLUTEN)
+            if matches:
+                violations.append(f"Gluten/wheat allergy: {', '.join(matches[:2])}")
 
         passes_filters = len(violations) == 0
 

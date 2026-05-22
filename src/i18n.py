@@ -263,6 +263,13 @@ _EN = {
     'ovo_help': 'Ovo-vegetarian: eggs OK, no dairy',
     'ovo_lacto_help': 'Both dairy and eggs OK',
     'jain_help': 'Jain diet avoids root/underground vegetables + alliums',
+    'allergies': 'Allergies',
+    'allergies_nuts': 'Tree nuts (almonds, walnuts, etc.)',
+    'allergies_peanuts': 'Peanuts',
+    'allergies_soy': 'Soy',
+    'allergies_mustard': 'Mustard',
+    'allergies_sesame': 'Sesame',
+    'allergies_gluten': 'Gluten',
 
     # Contribute page
     'contribute_button': '➕ Add this product to Open Food Facts',
@@ -565,6 +572,13 @@ _ES = {
     'ovo_help': 'Ovo-vegetariano: huevos OK, sin lácteos',
     'ovo_lacto_help': 'Lácteos y huevos OK',
     'jain_help': 'La dieta jain evita vegetales de raíz/subterráneos + aliáceos',
+    'allergies': 'Alergias',
+    'allergies_nuts': 'Frutos secos (almendras, nueces, etc.)',
+    'allergies_peanuts': 'Cacahuetes',
+    'allergies_soy': 'Soja',
+    'allergies_mustard': 'Mostaza',
+    'allergies_sesame': 'Sésamo',
+    'allergies_gluten': 'Gluten',
 
     # Contribute page
     'contribute_button': '➕ Agregar este producto a Open Food Facts',
@@ -624,6 +638,12 @@ DEFAULT_SETTINGS = {
     'ovo': False,
     'ovo_lacto': False,
     'strict_egg_traces': False,
+    'allergies_nuts': False,
+    'allergies_peanuts': False,
+    'allergies_soy': False,
+    'allergies_mustard': False,
+    'allergies_sesame': False,
+    'allergies_gluten': False,
     'equivalents_threshold': 0.25,
     'lang': 'en',
     'countries': {'tags': [], 'cc': None},  # empty = all countries
