@@ -454,8 +454,7 @@ with col_logo:
     st.caption(t('app_subtitle'))
     st.markdown('</div>', unsafe_allow_html=True)
 with col_right:
-    if st.button(t('go_to_settings'), use_container_width=True, key='header_settings'):
-        st.switch_page('pages/5_Settings.py')
+    pass
 
 st.divider()
 
@@ -469,7 +468,15 @@ mode = settings.get('mode', 'vegetarian')
 banner_parts = [f"{t('diet_mode')}: **{t(mode)}**"]
 if active_filters:
     banner_parts.append(t('restrictions_active', n=len(active_filters)))
-st.info('  |  '.join(banner_parts))
+
+# Diet mode banner with Settings button
+col_banner, col_settings = st.columns([5, 1], gap='medium')
+with col_banner:
+    st.info('  |  '.join(banner_parts))
+with col_settings:
+    st.write('')  # spacer
+    if st.button(t('go_to_settings'), use_container_width=True, key='settings_btn'):
+        st.switch_page('pages/5_Settings.py')
 
 st.divider()
 
