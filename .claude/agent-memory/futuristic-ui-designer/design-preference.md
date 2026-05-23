@@ -16,3 +16,6 @@ metadata:
 - Maintain green accent but apply to borders/outlines only
 - Increase whitespace between elements
 - Typography: clean, confident, minimal
+- Header: Logo centered with balanced columns [1, 2, 1], not asymmetric
+- Logo background must be transparent (CSS: background-color: transparent)
+- Settings button aligned right for balance
