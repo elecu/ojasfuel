@@ -221,7 +221,7 @@ st.subheader(t('about'))
 st.write('')
 col_info, col_logo = st.columns([3, 1])
 with col_info:
-    st.markdown(f"**{t('version')}:** v0.1.0 Beta")
+    st.markdown(f"**{t('version')}:** v0.1.1 Beta")
     st.markdown(f"**{t('creator')}:** Edwin Herrera")
     is_mexico_info = s.get('countries', {}).get('cc') == 'mx'
     if is_mexico_info:
