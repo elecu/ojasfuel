@@ -176,16 +176,20 @@ def _run_ocr_bytes(img_bytes: bytes) -> str:
 
 
 def _image_capture(key: str) -> bytes | None:
-    """Radio toggle: camera activates ONLY when user explicitly selects it.
+    """Radio toggle: camera/upload only when user explicitly activates.
     Returns image bytes or None."""
     _is_es = st.session_state.get('lang', 'es') == 'es'
     opt_cam = '📷 Cámara' if _is_es else '📷 Camera'
     opt_up  = '📁 Subir imagen' if _is_es else '📁 Upload image'
     method = st.radio('', [opt_cam, opt_up], horizontal=True, key=f'method_{key}',
                       label_visibility='collapsed')
+
     if method == opt_cam:
-        img = st.camera_input('', key=f'cam_{key}', label_visibility='collapsed')
-        return img.getvalue() if img else None
+        if st.button('Activar cámara / Open Camera', key=f'btn_cam_{key}', use_container_width=True):
+            st.session_state[f'cam_active_{key}'] = True
+        if st.session_state.get(f'cam_active_{key}'):
+            img = st.camera_input('', key=f'cam_{key}', label_visibility='collapsed')
+            return img.getvalue() if img else None
     else:
         img = st.file_uploader('', type=['jpg', 'jpeg', 'png', 'webp'],
                                key=f'up_{key}', label_visibility='collapsed')
