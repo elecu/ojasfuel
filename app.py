@@ -445,11 +445,15 @@ def _classify_results(products: list) -> list:
 
 
 # ── Header ──────────────────────────────────────────────────────────────────
-col_title, col_settings = st.columns([5, 1])
+col_left, col_title, col_settings = st.columns([0.3, 5, 1])
+with col_left:
+    pass
 with col_title:
-    st.image('logo_text.png', width=200)
+    st.image('logo_text2.png', width=300)
     st.caption(t('app_subtitle'))
 with col_settings:
+    st.write('')
+    st.write('')
     st.write('')
     if st.button(t('go_to_settings'), use_container_width=True):
         st.switch_page('pages/5_Settings.py')
