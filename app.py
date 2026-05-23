@@ -445,13 +445,15 @@ def _classify_results(products: list) -> list:
 
 
 # ── Header ──────────────────────────────────────────────────────────────────
-col_left, col_title, col_settings = st.columns([0.3, 5, 1])
+col_left, col_logo, col_right = st.columns([1, 2, 1])
 with col_left:
     pass
-with col_title:
-    st.image('logo_text2.png', width=300)
+with col_logo:
+    st.markdown('<div style="text-align: center;">', unsafe_allow_html=True)
+    st.image('logo_text2.png', width=320)
     st.caption(t('app_subtitle'))
-with col_settings:
+    st.markdown('</div>', unsafe_allow_html=True)
+with col_right:
     st.write('')
     st.write('')
     st.write('')

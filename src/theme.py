@@ -413,6 +413,11 @@ hr, [data-testid="stDivider"] hr {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
+/* ── Logo image background fix ────────────────────────────────────────── */
+[data-testid="stImage"] img {
+    background-color: transparent !important;
+}
+
 /* ── Accent header line ───────────────────────────────────────────────── */
 .smaeuk-page-header {
     border-left: 3px solid var(--accent);

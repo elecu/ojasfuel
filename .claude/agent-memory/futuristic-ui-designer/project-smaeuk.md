@@ -7,10 +7,13 @@ metadata:
 
 OjasFuel is a Streamlit multi-page food scanner app (vegetarian/vegan classifier) using Open Food Facts data.
 
-**Accent color chosen:** Electric cyan `#00d4ff` (dark) / `#0099cc` (light)
+**Accent color (updated):** Minimalista green `#00d97f` (dark) / `#1db854` (light)
+**Logo:** `logo_text2.png` — minimalist geometric style, natural green, consonant with outlined aesthetic
 **Font:** Inter (Google Fonts import via CSS)
+**Button style:** Outlined (border-only, transparent background) for Bauhaus minimalist look
 **Theme system:** CSS variables injected via `src/theme.py` → `inject_theme()`, toggled by `st.session_state['theme']` ('dark'|'light'). Toggle lives in `pages/5_Settings.py`.
 **Base Streamlit theme:** `config.toml` set to dark base so pre-hydration flash is dark.
+**Aesthetic:** Flat design + minimalista outlined buttons + professional spacing
 
 **Why:** CSS variable approach keeps a single source of truth for all color tokens; toggling `session_state['theme']` + `st.rerun()` re-injects the correct variable block instantly.
 
