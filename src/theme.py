@@ -425,9 +425,16 @@ img[src*="logo_text2"] {
     mix-blend-mode: lighten !important;
     filter: drop-shadow(0 0 12px var(--accent-glow)) !important;
     transition: filter var(--transition) !important;
+    margin: 0 auto !important;
+    display: block !important;
 }
 img[src*="logo_text2"]:hover {
     filter: drop-shadow(0 0 20px var(--accent-glow)) !important;
+}
+
+/* Center caption/subtitle text */
+[data-testid="stCaptionContainer"] {
+    text-align: center !important;
 }
 
 /* ── Accent header line ───────────────────────────────────────────────── */
