@@ -178,7 +178,7 @@ def _run_ocr_bytes(img_bytes: bytes) -> str:
 def _image_capture(key: str) -> bytes | None:
     """Radio toggle: camera/upload only when user explicitly activates.
     Returns image bytes or None."""
-    _is_es = st.session_state.get('lang', 'es') == 'es'
+    _is_es = st.session_state.get('lang', 'en') == 'es'
     opt_cam = '📷 Cámara' if _is_es else '📷 Camera'
     opt_up  = '📁 Subir imagen' if _is_es else '📁 Upload image'
     method = st.radio('', [opt_cam, opt_up], horizontal=True, key=f'method_{key}',
@@ -379,7 +379,7 @@ _available_to_add = [k for k in _ALL_NUTRIENTS if k not in _active_keys]
 if _available_to_add:
     col_add1, col_add2 = st.columns([3, 1])
     with col_add1:
-        _add_label = 'Agregar nutriente' if st.session_state.get('lang', 'es') == 'es' else 'Add nutrient'
+        _add_label = 'Agregar nutriente' if st.session_state.get('lang', 'en') == 'es' else 'Add nutrient'
         _to_add = st.selectbox(
             f'➕ {_add_label}',
             options=_available_to_add,
@@ -453,7 +453,7 @@ with st.form('contribute_form'):
                         nutrition_values[key] = val
     else:
         _hint = ('Usa los botones de OCR arriba o el selector "Agregar nutriente" para añadir campos.'
-                 if st.session_state.get('lang', 'es') == 'es'
+                 if st.session_state.get('lang', 'en') == 'es'
                  else 'Use the OCR buttons above or the "Add nutrient" selector to add fields.')
         st.caption(f'💡 {_hint}')
 
