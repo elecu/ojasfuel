@@ -415,11 +415,18 @@ hr, [data-testid="stDivider"] hr {
 
 /* ── Logo image background fix + glow ─────────────────────────────────── */
 [data-testid="stImage"] img {
+    background: transparent !important;
     background-color: transparent !important;
+    border-radius: 8px !important;
+}
+
+/* Logo-specific: make white background invisible, only show content */
+img[src*="logo_text2"] {
+    mix-blend-mode: lighten !important;
     filter: drop-shadow(0 0 12px var(--accent-glow)) !important;
     transition: filter var(--transition) !important;
 }
-[data-testid="stImage"] img:hover {
+img[src*="logo_text2"]:hover {
     filter: drop-shadow(0 0 20px var(--accent-glow)) !important;
 }
 

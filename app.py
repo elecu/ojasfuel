@@ -445,7 +445,7 @@ def _classify_results(products: list) -> list:
 
 
 # ── Header ──────────────────────────────────────────────────────────────────
-col_left, col_logo, col_right = st.columns([1, 2, 1])
+col_left, col_logo, col_right = st.columns([1, 2, 1], gap='small')
 with col_left:
     pass
 with col_logo:
@@ -454,11 +454,10 @@ with col_logo:
     st.caption(t('app_subtitle'))
     st.markdown('</div>', unsafe_allow_html=True)
 with col_right:
-    st.write('')
-    st.write('')
-    st.write('')
-    if st.button(t('go_to_settings'), use_container_width=True):
+    if st.button(t('go_to_settings'), use_container_width=True, key='header_settings'):
         st.switch_page('pages/5_Settings.py')
+
+st.divider()
 
 # Beta banner
 settings = st.session_state['settings']
