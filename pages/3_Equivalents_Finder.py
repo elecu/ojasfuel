@@ -59,6 +59,8 @@ _MATCH_MODES = {
     'cal_only':          ('match_cal_only',          [('Energy (kcal)', 1.0)]),
     'cal_protein':       ('match_cal_protein',        [('Energy (kcal)', 0.5), ('Protein (g)', 0.5)]),
     'cal_protein_carbs': ('match_cal_protein_carbs',  [('Energy (kcal)', 0.4), ('Protein (g)', 0.4), ('Carbohydrates (g)', 0.2)]),
+    'protein_carbs':     ('match_protein_carbs',      [('Protein (g)', 0.5), ('Carbohydrates (g)', 0.5)]),
+    'carbs_only':        ('match_carbs_only',         [('Carbohydrates (g)', 1.0)]),
     'protein_priority':  ('match_protein_priority',   [('Protein (g)', 0.7), ('Energy (kcal)', 0.3)]),
 }
 
