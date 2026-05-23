@@ -469,14 +469,15 @@ banner_parts = [f"{t('diet_mode')}: **{t(mode)}**"]
 if active_filters:
     banner_parts.append(t('restrictions_active', n=len(active_filters)))
 
-# Diet mode banner with Settings button
-col_banner, col_settings = st.columns([5, 1], gap='medium')
-with col_banner:
-    st.info('  |  '.join(banner_parts))
-with col_settings:
-    st.write('')  # spacer
-    if st.button(t('go_to_settings'), use_container_width=True, key='settings_btn'):
-        st.switch_page('pages/5_Settings.py')
+# Diet mode with Settings button inside same info box
+with st.container(border=True):
+    col_diet, col_settings = st.columns([5, 1], gap='large')
+    with col_diet:
+        st.markdown(f"<span style='color: var(--text-primary);'>{' | '.join(banner_parts)}</span>",
+                   unsafe_allow_html=True)
+    with col_settings:
+        if st.button(t('go_to_settings'), use_container_width=True, key='settings_btn'):
+            st.switch_page('pages/5_Settings.py')
 
 st.divider()
 
