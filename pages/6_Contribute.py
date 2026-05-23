@@ -465,6 +465,8 @@ with st.form('contribute_form'):
 if submitted:
     if not barcode.strip() or not name.strip():
         st.error(t('contribute_required'))
+    elif not barcode.strip().isdigit() or not (8 <= len(barcode.strip()) <= 14):
+        st.error('❌ Barcode must be 8-14 digits (EAN/UPC format)')
     else:
         with st.spinner(t('contribute_submitting')):
             result = submit_product(

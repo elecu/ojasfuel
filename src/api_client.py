@@ -308,7 +308,7 @@ def submit_product(
     if ingredients.strip():
         data['ingredients_text'] = ingredients.strip()
     if countries.strip():
-        data['countries'] = countries.strip()
+        data['countries_tags'] = countries.strip()
     if nutrition:
         for key, val in nutrition.items():
             if val is not None and str(val).strip():
