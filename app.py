@@ -445,10 +445,10 @@ def _classify_results(products: list) -> list:
 
 
 # ── Header ──────────────────────────────────────────────────────────────────
-st.markdown('<div style="text-align: center; margin-bottom: 1.5rem;">', unsafe_allow_html=True)
-st.image('logo_text2.png', width=320)
-st.caption(t('app_subtitle'))
-st.markdown('</div>', unsafe_allow_html=True)
+_, col_logo, _ = st.columns([1, 2, 1])
+with col_logo:
+    st.image('logo_text2.png', width=320)
+    st.caption(t('app_subtitle'))
 
 st.divider()
 
