@@ -1,13 +1,20 @@
-[theme]
-base             = "dark"
-primaryColor     = "#00d4ff"
-backgroundColor  = "#0a0a0f"
-secondaryBackgroundColor = "#16161f"
-textColor        = "#f0f0f5"
-font             = "sans serif"
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[logger]
+level = "error"
 
 [browser]
 gatherUsageStats = false
 
+[theme]
+base = "dark"
+primaryColor = "#00e676"
+
 [server]
 headless = true
+runOnSave = true
+maxUploadSize = 200
+enableCORS = false
+enableXsrfProtection = true

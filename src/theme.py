@@ -458,8 +458,10 @@ def inject_theme() -> None:
     """
     Inject theme CSS into the current Streamlit page.
     Must be called after init_session() so session_state['theme'] exists.
+    Uses unsafe_allow_html=True with eager rendering to avoid layout shift.
     """
     theme = st.session_state.get('theme', 'dark')
     vars_css = _CSS_DARK if theme == 'dark' else _CSS_LIGHT
     full_css = f"<style>{vars_css}{_CSS_SHARED}</style>"
-    st.markdown(full_css, unsafe_allow_html=True)
+    # Use unsafe_allow_html with immediate rendering
+    st.html(full_css)
