@@ -463,16 +463,12 @@ diet_label = f"{t('diet_mode')}: <strong>{t(mode)}</strong>"
 if active_filters:
     diet_label += f" &nbsp;|&nbsp; {t('restrictions_active', n=len(active_filters))}"
 
-# Diet mode compact banner + Settings in same container
-col_diet, col_settings = st.columns([5, 1], gap='small', vertical_alignment='center')
-with col_diet:
-    st.markdown(
-        f"<div style='border:1px solid rgba(255,255,255,0.08); border-radius:6px; "
-        f"padding:8px 12px; font-size:0.85rem;'>{diet_label}</div>",
-        unsafe_allow_html=True
-    )
-with col_settings:
-    if st.button('⚙️', use_container_width=True, key='settings_btn', help=t('go_to_settings')):
+# Diet mode compact banner + Settings
+col1, col2 = st.columns([1, 0.08], gap='small')
+with col1:
+    st.markdown(f"**Base Diet Mode:** {t(mode)}")
+with col2:
+    if st.button('⚙️', key='settings_btn', help=t('go_to_settings'), use_container_width=False):
         st.switch_page('pages/5_Settings.py')
 
 st.divider()

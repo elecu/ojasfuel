@@ -15,6 +15,13 @@ OjasFuel is a Streamlit multi-page food scanner app (vegetarian/vegan classifier
 **Base Streamlit theme:** `config.toml` set to dark base so pre-hydration flash is dark.
 **Aesthetic:** Flat design + minimalista outlined buttons + professional spacing
 
+**Header layout (final):**
+- Logo: `st.columns([2, 1, 2])` + `use_column_width=True` inside center col → auto-scales, perfectly centered
+- Logo PNG resized to 600x200px (was 2172px — Streamlit ignores width on huge PNGs)
+- Diet mode banner: inline HTML `0.75rem` muted text, thin border, low visual weight
+- Settings: outlined button in `[6, 1]` column beside banner
+- Subtitle: centered via same [2,1,2] columns, `st.caption`
+
 **Why:** CSS variable approach keeps a single source of truth for all color tokens; toggling `session_state['theme']` + `st.rerun()` re-injects the correct variable block instantly.
 
 **How to apply:** Every page calls `inject_theme()` immediately after `init_session()`. Never put theme logic inside business-logic functions.
