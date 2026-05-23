@@ -213,13 +213,7 @@ _default_country = 'en:mexico' if _cc == 'mx' else ''
 if 'active_nutrition_keys' not in st.session_state:
     st.session_state['active_nutrition_keys'] = []
 
-# ── Foto del producto ─────────────────────────────────────────────────────────
-st.subheader(t('contribute_photo_title'))
-_product_photo_bytes = _image_capture('product')
-if _product_photo_bytes:
-    st.image(_product_photo_bytes, width=200)
-
-st.divider()
+_product_photo_bytes = None
 
 # ── OCR section — tabs ────────────────────────────────────────────────────────
 _ocr_miss_msg = 'EasyOCR no disponible. Instala con: pip install easyocr pillow numpy'
