@@ -449,7 +449,7 @@ _, col_logo, _ = st.columns([0.5, 3, 0.5])
 with col_logo:
     col_img_left, col_img_center, col_img_right = st.columns([0.2, 2.6, 0.2])
     with col_img_center:
-        st.image('logo_text2.png', width=100, use_column_width=False)
+        st.image('logo_text2.png', width=200, use_column_width=False)
     col_sub_left, col_sub_center, col_sub_right = st.columns([0.2, 2.6, 0.2])
     with col_sub_center:
         st.caption(t('app_subtitle'))
