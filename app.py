@@ -459,19 +459,24 @@ active_filters = [k for k in ('no_garlic','no_onion','no_caffeine','no_alcohol',
                                'ovo_lacto','strict_egg_traces') if settings.get(k)]
 mode = settings.get('mode', 'vegetarian')
 
-banner_parts = [f"{t('diet_mode')}: **{t(mode)}**"]
+diet_label = f"{t('diet_mode')}: <strong>{t(mode)}</strong>"
 if active_filters:
-    banner_parts.append(t('restrictions_active', n=len(active_filters)))
+    diet_label += f" &nbsp;|&nbsp; {t('restrictions_active', n=len(active_filters))}"
 
-# Diet mode with Settings button inside same info box
-with st.container(border=True):
-    col_diet, col_settings = st.columns([5, 1], gap='large')
-    with col_diet:
-        st.markdown(f"<span style='color: var(--text-primary);'>{' | '.join(banner_parts)}</span>",
-                   unsafe_allow_html=True)
-    with col_settings:
-        if st.button(t('go_to_settings'), use_container_width=True, key='settings_btn'):
-            st.switch_page('pages/5_Settings.py')
+# Diet mode compact banner + Settings
+col_diet, col_settings = st.columns([6, 1], gap='small')
+with col_diet:
+    st.markdown(
+        f"<div style='border:1px solid rgba(255,255,255,0.08); border-radius:6px; "
+        f"padding:5px 10px; font-size:0.75rem; color:var(--text-muted); display:inline-block; width:100%;'>"
+        f"{diet_label}</div>",
+        unsafe_allow_html=True
+    )
+with col_settings:
+    st.markdown("<div style='font-size:0.75rem'>", unsafe_allow_html=True)
+    if st.button(t('go_to_settings'), use_container_width=True, key='settings_btn'):
+        st.switch_page('pages/5_Settings.py')
+    st.markdown("</div>", unsafe_allow_html=True)
 
 st.divider()
 
