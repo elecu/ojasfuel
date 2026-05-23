@@ -413,9 +413,14 @@ hr, [data-testid="stDivider"] hr {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-/* ── Logo image background fix ────────────────────────────────────────── */
+/* ── Logo image background fix + glow ─────────────────────────────────── */
 [data-testid="stImage"] img {
     background-color: transparent !important;
+    filter: drop-shadow(0 0 12px var(--accent-glow)) !important;
+    transition: filter var(--transition) !important;
+}
+[data-testid="stImage"] img:hover {
+    filter: drop-shadow(0 0 20px var(--accent-glow)) !important;
 }
 
 /* ── Accent header line ───────────────────────────────────────────────── */
