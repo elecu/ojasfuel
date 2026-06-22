@@ -1,0 +1,4 @@
+.claude/
+CLAUDE_PROMPT.md
+__pycache__/
+*.pyc
