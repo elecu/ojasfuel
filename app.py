@@ -447,7 +447,7 @@ def _classify_results(products: list) -> list:
 # ── Header ──────────────────────────────────────────────────────────────────
 _, col_logo, _ = st.columns([2, 1, 2])
 with col_logo:
-    st.image('logo_text2.png', use_column_width=True)
+    st.image('logo_text2.png', width="stretch")
     st.caption(t('app_subtitle'))
 
 st.divider()
