@@ -9,6 +9,10 @@ from src.theme import inject_theme
 from src.api_client import search_by_name as _off_search
 from src.smae_client import search_by_name as _smae_search
 from src.filtering import classify_results
+from src.alternatives import (
+    MATCH_MODES as _MATCH_MODES, macro_score as _macro_score,
+    passes_threshold as _passes_threshold, equiv_grams_for_macro as _equiv_grams_for_macro,
+)
 from src.ui_helpers import tn, nutrient_unit, fmt_value, parse_serving_grams
 
 
@@ -48,50 +52,6 @@ def _auto_query(product: dict) -> str:
 st.set_page_config(page_title='OjasFuel — Equivalents', page_icon='🔄', layout='wide')
 init_session()
 inject_theme()
-
-# ── Match priority config ─────────────────────────────────────────────────────
-_MATCH_MODES = {
-    'cal_only':          ('match_cal_only',          [('Energy (kcal)', 1.0)]),
-    'cal_protein':       ('match_cal_protein',        [('Energy (kcal)', 0.5), ('Protein (g)', 0.5)]),
-    'cal_protein_carbs': ('match_cal_protein_carbs',  [('Energy (kcal)', 0.4), ('Protein (g)', 0.4), ('Carbohydrates (g)', 0.2)]),
-    'protein_carbs':     ('match_protein_carbs',      [('Protein (g)', 0.5), ('Carbohydrates (g)', 0.5)]),
-    'carbs_only':        ('match_carbs_only',         [('Carbohydrates (g)', 1.0)]),
-    'protein_priority':  ('match_protein_priority',   [('Protein (g)', 0.7), ('Energy (kcal)', 0.3)]),
-}
-
-
-def _macro_score(orig: dict, cand: dict, weights: list[tuple[str, float]]) -> tuple[float, dict]:
-    score = 0.0
-    diffs = {}
-    for macro, w in weights:
-        o = orig.get(macro, 0) or 0
-        c = cand.get(macro, 0) or 0
-        rel = abs(c - o) / max(o, 1)
-        score += w * rel
-        diffs[macro] = (c - o) / max(o, 1) * 100
-    return score, diffs
-
-
-def _passes_threshold(orig: dict, cand: dict, macros: list[tuple[str, float]], threshold: float) -> bool:
-    for macro, _ in macros:
-        o = orig.get(macro, 0) or 0
-        c = cand.get(macro, 0) or 0
-        if o == 0:
-            continue
-        if abs(c - o) / o > threshold:
-            return False
-    return True
-
-
-def _equiv_grams_for_macro(orig_nutr: dict, alt_nutr: dict, macro: str, orig_grams: float) -> float | None:
-    """How many grams of alt product match `orig_grams` of orig for a single macro."""
-    orig_val = orig_nutr.get(macro, 0) or 0
-    alt_per_100 = alt_nutr.get(macro, 0) or 0
-    if not orig_val or not alt_per_100:
-        return None
-    target = orig_val * orig_grams / 100
-    return round(target / alt_per_100 * 100, 1)
-
 
 # ── Page ──────────────────────────────────────────────────────────────────────
 if st.button(t('back')):

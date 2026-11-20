@@ -4,6 +4,7 @@ openfoodfacts>=5.0
 requests>=2.31
 Pillow>=10.0
 deep-translator>=1.11
+rapidfuzz>=3.0
 
 # Optional — barcode detection (requires system lib: sudo apt install libzbar0)
 pyzbar>=0.1.9
