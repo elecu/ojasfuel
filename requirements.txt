@@ -1,4 +1,4 @@
-streamlit>=1.35
+streamlit>=1.50
 streamlit-javascript>=0.1.5
 openfoodfacts>=5.0
 requests>=2.31
@@ -10,4 +10,7 @@ pyzbar>=0.1.9
 
 # Optional — OCR (first run downloads ~1GB models)
 easyocr>=1.7
-opencv-python>=4.9
+opencv-python-headless>=4.9
+
+# Dev / tests
+pytest>=8.0

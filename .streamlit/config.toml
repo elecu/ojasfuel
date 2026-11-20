@@ -14,7 +14,6 @@ primaryColor = "#00e676"
 
 [server]
 headless = true
-runOnSave = true
 maxUploadSize = 200
 enableCORS = false
 enableXsrfProtection = true
