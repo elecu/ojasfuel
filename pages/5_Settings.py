@@ -13,7 +13,6 @@ st.set_page_config(page_title='OjasFuel — Settings', page_icon='⚙️', layou
 init_session()
 inject_theme()
 
-THRESHOLDS = [5, 10, 15, 20, 25, 30]
 
 
 def _wk(name: str) -> str:
@@ -189,23 +188,6 @@ with st.expander(t('extra_restrictions'), expanded=any(s.get(k) for k in _extra_
         for k in ('no_mushrooms', 'no_gelatin'):
             _checkbox(k)
         _checkbox('jain', 'jain_help')
-
-st.divider()
-
-# ── Equivalents threshold ─────────────────────────────────────────────────────
-st.subheader(t('equivalents_threshold'))
-_pct = round(s.get('equivalents_threshold', 0.15) * 100)
-_pct = min(THRESHOLDS, key=lambda o: abs(o - _pct))
-st.select_slider(
-    t('equivalents_threshold'),
-    options=THRESHOLDS,
-    value=_pct,
-    format_func=lambda v: f'±{v}%',
-    label_visibility='collapsed',
-    key=_wk('threshold'),
-    on_change=_changed, args=('equivalents_threshold', _wk('threshold'), lambda v: v / 100),
-)
-st.caption(t('threshold_label', pct=round(s.get('equivalents_threshold', 0.15) * 100)))
 
 st.divider()
 

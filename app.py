@@ -575,6 +575,12 @@ if _chips:
     st.pills(t('quick_search'), options=_chips, selection_mode='single', key='chip_pick',
              on_change=_chip_picked, label_visibility='collapsed')
 
+if st.button(t('replace_link'), key='replace_link_btn', type='tertiary'):
+    st.session_state['replace_orig'] = None
+    st.session_state['replace_alt'] = None
+    st.session_state['nav_from'] = 'app.py'
+    st.switch_page('pages/3_Equivalents_Finder.py')
+
 if scan_clicked:
     _opening = not st.session_state.get('show_scanner', False)
     st.session_state['show_scanner'] = _opening

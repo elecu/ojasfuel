@@ -137,7 +137,7 @@ if status in ('no', 'unknown') or active == 'similar':
         with st.spinner(t('finding_alternatives')):
             try:
                 from src.alternatives import find_alternatives_ex
-                alts, incomplete = find_alternatives_ex(product, settings, n=3)
+                alts, incomplete = find_alternatives_ex(product, settings, n=9)
             except Exception:
                 alts, incomplete = [], True
         if not incomplete:  # never remember a network failure for the session
@@ -147,9 +147,14 @@ if status in ('no', 'unknown') or active == 'similar':
         st.button(t('retry_search'), key='alts_retry')  # rerun = new attempt
     elif not alts:
         st.caption(t('no_alternatives'))
-    for i, alt in enumerate(alts):
+    _shown = st.session_state.get('_alts_shown', {}).get(pid, 3)
+    for i, alt in enumerate(alts[:_shown]):
         av = alt.get('_verdict') or compute_verdict(alt, settings)
         verdict_row(alt, av, key=f'alt_{i}')
+    if len(alts) > _shown:
+        if st.button(t('replace_show_more'), key='alts_more'):
+            st.session_state.setdefault('_alts_shown', {})[pid] = _shown + 3
+            st.rerun()
 
 # ── Quick questions (deterministic, no AI) ───────────────────────────────────
 cs = settings.get('countries', {})
@@ -250,10 +255,6 @@ with st.expander(t('product_details')):
             st.caption(t('no_ingredients'))
     if product.get('url'):
         st.markdown(f"[{t('open_off')}]({product['url']})")
-    if st.button(t('find_equivalents'), key='equiv_btn'):
-        st.session_state['equiv_original'] = product
-        st.session_state['nav_from'] = 'pages/1_Detail.py'
-        st.switch_page('pages/3_Equivalents_Finder.py')
 
 with st.expander(t('nutrition_facts')):
     st.caption(t('per_100g'))
@@ -288,7 +289,7 @@ with st.expander(t('nutrition_facts')):
                 )
 
 # ── Actions ──────────────────────────────────────────────────────────────────
-a1, a2, a3, a4 = st.columns(4)
+a1, a2, a3, a4, a5 = st.columns(5)
 with a1:
     _saved = history.in_list(product, 'safe')
     st.button(('✅ ' + t('saved_safe')) if _saved else ('⭐ ' + t('save_safe')),
@@ -303,6 +304,12 @@ with a3:
         st.session_state['scanner_key'] = st.session_state.get('scanner_key', 0) + 1
         st.switch_page('app.py')
 with a4:
+    if st.button(t('replace_btn'), key='replace_btn', width='stretch'):
+        st.session_state['replace_orig'] = product
+        st.session_state['replace_alt'] = None
+        st.session_state['nav_from'] = 'pages/1_Detail.py'
+        st.switch_page('pages/3_Equivalents_Finder.py')
+with a5:
     if product.get('url'):
         st.link_button('🚩 ' + t('report_error'), product['url'], width='stretch')
     else:

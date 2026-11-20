@@ -6,6 +6,7 @@ import re
 import streamlit as st
 
 from src.i18n import t
+from src.replace import parse_serving_grams  # noqa: F401  (re-exported)
 
 # Nutrient display keys whose i18n key is not simply nutrient_<slug>.
 _SPECIAL_KEYS = {
@@ -55,34 +56,6 @@ def fmt_value(value) -> str:
     return f'{v:.2f}'.rstrip('0').rstrip('.')
 
 
-def parse_serving_grams(product: dict) -> tuple[float | None, str]:
-    """
-    Serving size in grams from a product dict.
-    Returns (grams, display_label) or (None, '').
-    """
-    srv_str = product.get('serving_size', '') or ''
-    m = re.search(r'\(?\s*(\d+(?:[.,]\d+)?)\s*g\b\s*\)?', srv_str, re.IGNORECASE)
-    if m:
-        return float(m.group(1).replace(',', '.')), srv_str
-
-    raw = product.get('_raw', {}) or {}
-    qty = raw.get('serving_quantity')
-    if qty:
-        try:
-            g = float(qty)
-            return g, (srv_str or f'{g}g')
-        except (TypeError, ValueError):
-            pass
-
-    smae_g = product.get('_smae_portion_g')
-    if smae_g:
-        try:
-            return float(smae_g), (srv_str or f'{smae_g} g')
-        except (TypeError, ValueError):
-            pass
-    return None, ''
-
-
 def diet_source_label(source: str) -> str:
     """Human label for where a diet classification came from."""
     if source == 'off':
@@ -123,6 +96,14 @@ VERDICT_CSS = """
 .vd-row { display: flex; align-items: center; gap: 8px; }
 .vd-row .vd-dot { font-size: 1.3rem; }
 .vd-row .vd-meta { color: var(--text-secondary); font-size: .85rem; }
+/* replace flow */
+.rp-badge { display: inline-block; border-radius: 999px; padding: 4px 12px; font-weight: 700;
+  font-size: .95rem; border: 1.5px solid var(--border); background: var(--bg-surface); }
+.rp-badge.very, .rp-badge.similar { border-color: var(--success); background: var(--success-bg); color: var(--success); }
+.rp-badge.partial { border-color: var(--warning); background: var(--warning-bg); color: var(--warning); }
+.rp-badge.low { border-color: var(--error); background: var(--error-bg); color: var(--error); }
+.rp-eat { font-size: 1.6rem; line-height: 1.25; color: var(--text-primary); margin: 4px 0 6px; }
+.rp-eat strong { font-weight: 800; }
 mark { background: var(--warning-bg); color: var(--warning); border-radius: 4px;
   padding: 0 3px; font-weight: 700; }
 @media (max-width: 640px) { .vd-title { font-size: 1.6rem; } .vd-light { font-size: 2.6rem; } }
