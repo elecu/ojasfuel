@@ -80,7 +80,7 @@ EGGS = [
     r'\bE1105\b',  # Lysozyme
     # Spanish
     r'\bhuevo\b', r'\bhuevos\b', r'\byema\b', r'\bclara\b',
-    r'\balbúmina\b',
+    r'\balbúmina\b', r'\brompope\b',
     # French
     r'\boeuf\b', r'\boeufs\b',
     # German
@@ -341,4 +341,30 @@ ALLERGIES_GLUTEN = [
     # German
     r'\bweizen\b', r'\bgerste\b', r'\broggn\b',
     r'\bhafer\b',
+]
+
+
+# Plant-based / "free-from" phrases that contain dairy/egg words but are NOT animal products.
+# Stripped from the text before matching DAIRY / EGGS.
+_PLANT = (r'coconut|almond|oat|soy|soya|soja|rice|cashew|hazelnut|pea|hemp|plant|vegetable|'
+          r'vegan|nut|macadamia|pistachio|walnut|flax|quinoa|lupin')
+_PLANT_ES = (r'coco|soya|soja|almendras?|avena|arroz|nuez|nueces|cacahuate|man[ií]|cacao|'
+             r'anacardo|mara[ñn][oó]n|avellanas?|pistache|vegetal|vegana?')
+_PLANT_FR = (r'coco|amandes?|avoine|soja|riz|cacao|cacahu[eè]tes?|noisettes?|noix|'
+             r'cajou|v[ée]g[ée]tal(?:e)?')
+PLANT_BASED_EXCEPTIONS = [
+    rf'\b(?:{_PLANT})\s+(?:milk|drink|cream|butter|yog(?:h)?urt|cheese|creamer)\b',
+    r'\b(?:cocoa|cacao|peanut|shea|nut|almond|cashew|apple|seed|sunflower|coconut|hazelnut)\s+butter\b',
+    r'\bcream of tartar\b',
+    rf'\b(?:leche|bebida|crema|nata|yogur|queso|mantequilla)\s+(?:vegetal|vegana?|de\s+(?:{_PLANT_ES}))\b',
+    r'\bmanteca de cacao\b',
+    r'\bmantequilla de (?:cacao|cacahuate|man[ií]|almendras?|nuez|karit[eé])\b',
+    rf'\b(?:lait|cr[èe]me|beurre|yaourt|fromage)\s+(?:v[ée]g[ée]tal(?:e)?|de\s+(?:{_PLANT_FR}))\b',
+    r'\b(?:kokos|hafer|soja|mandel|reis|cashew|n[uü]ss|haselnuss|erbsen)(?:milch|sahne|joghurt|jogurt|drink|k[aä]se)\b',
+    r'\b(?:kakao|kokos|sheabutter|erdnuss|mandel)butter\b',
+    r'\b(?:dairy|milk|lactose|egg|gluten)[\s\-]free\b',
+    r'\bwithout (?:milk|dairy|lactose|eggs?)\b',
+    r'\bsin (?:lactosa|leche|l[aá]cteos|huevo)\b',
+    r'\bsans (?:lactose|lait|[œo]ufs?)\b',
+    r'\blactosefrei\b',
 ]

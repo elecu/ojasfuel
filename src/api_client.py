@@ -4,8 +4,11 @@ Mirrors the patterns from test_search.py.
 """
 
 import functools
+import os
 import requests
 import openfoodfacts
+
+from src.barcode import barcode_variants, normalize_barcode
 
 _api = openfoodfacts.API(user_agent="OjasFuel/1.0")
 
@@ -42,107 +45,10 @@ def country_tags_to_cc(tags: list) -> str | None:
             return cc
     return None
 
-# Nutrition fields: display_name → OFF field key
+# Nutrition fields: display_name → OFF nutriment key (per 100 g).
+# OFF stores every *_100g value in grams except energy (kcal / kJ),
+# so mg / µg display units need a conversion factor.
 NUTRITION_FIELDS = {
-    'Energy (kcal)': 'energy_100g',
-    'Energy (kJ)': 'energy-kj_100g',
-    'Protein (g)': 'proteins_100g',
-    'Fat (g)': 'fat_100g',
-    'Saturated Fat (g)': 'saturated-fat_100g',
-    'Carbohydrates (g)': 'carbohydrates_100g',
-    'Sugars (g)': 'sugars_100g',
-    'Fiber (g)': 'fiber_100g',
-    'Sodium (mg)': 'sodium_100g',
-    'Salt (g)': 'salt_100g',
-    'Potassium (mg)': 'potassium_100g',
-    'Calcium (mg)': 'calcium_100g',
-    'Iron (mg)': 'iron_100g',
-    'Magnesium (mg)': 'magnesium_100g',
-    'Phosphorus (mg)': 'phosphorus_100g',
-    'Zinc (mg)': 'zinc_100g',
-    'Manganese (mg)': 'manganese_100g',
-    'Copper (mg)': 'copper_100g',
-    'Selenium (µg)': 'selenium_100g',
-    'Iodine (µg)': 'iodine_100g',
-    'Vitamin A (µg)': 'vitamin-a_100g',
-    'Vitamin B1 (mg)': 'vitamin-b1_100g',
-    'Vitamin B2 (mg)': 'vitamin-b2_100g',
-    'Vitamin B3 (mg)': 'vitamin-b3_100g',
-    'Vitamin B6 (mg)': 'vitamin-b6_100g',
-    'Vitamin B9 (µg)': 'vitamin-b9_100g',
-    'Vitamin B12 (µg)': 'vitamin-b12_100g',
-    'Vitamin C (mg)': 'vitamin-c_100g',
-    'Vitamin D (µg)': 'vitamin-d_100g',
-    'Vitamin E (mg)': 'vitamin-e_100g',
-    'Vitamin K (µg)': 'vitamin-k_100g',
-    'Cholesterol (mg)': 'cholesterol_100g',
-    'Alcohol (g)': 'alcohol_100g',
-    'Caffeine (mg)': 'caffeine_100g',
-}
-
-NUTRITION_GROUPS = {
-    'Macronutrients': [
-        'Energy (kcal)', 'Energy (kJ)', 'Protein (g)', 'Fat (g)',
-        'Saturated Fat (g)', 'Carbohydrates (g)', 'Sugars (g)',
-        'Fiber (g)', 'Cholesterol (mg)', 'Alcohol (g)',
-    ],
-    'Minerals': [
-        'Sodium (mg)', 'Salt (g)', 'Potassium (mg)', 'Calcium (mg)',
-        'Iron (mg)', 'Magnesium (mg)', 'Phosphorus (mg)', 'Zinc (mg)',
-        'Manganese (mg)', 'Copper (mg)', 'Selenium (µg)', 'Iodine (µg)',
-    ],
-    'Vitamins': [
-        'Vitamin A (µg)', 'Vitamin B1 (mg)', 'Vitamin B2 (mg)',
-        'Vitamin B3 (mg)', 'Vitamin B6 (mg)', 'Vitamin B9 (µg)',
-        'Vitamin B12 (µg)', 'Vitamin C (mg)', 'Vitamin D (µg)',
-        'Vitamin E (mg)', 'Vitamin K (µg)',
-    ],
-    'Other': ['Caffeine (mg)'],
-}
-
-
-def _get_nutrient(product: dict, field: str):
-    """Try direct access then nested under nutriments."""
-    val = product.get(field)
-    if val is not None:
-        return val
-    nutriments = product.get('nutriments', {})
-    return nutriments.get(field)
-
-
-def format_product(raw: dict) -> dict:
-    """Normalise a raw OFF product dict into the app's standard format."""
-    product_id = raw.get('id') or raw.get('code', 'N/A')
-    nutrition = {}
-    for display_name, field_key in NUTRITION_FIELDS.items():
-        val = _get_nutrient(raw, field_key)
-        if val is not None:
-            try:
-                nutrition[display_name] = float(val)
-            except (TypeError, ValueError):
-                pass
-
-    return {
-        'id': product_id,
-        'name': raw.get('product_name') or raw.get('product_name_en', 'Unknown'),
-        'brand': raw.get('brands', ''),
-        'ingredients': raw.get('ingredients_text') or raw.get('ingredients_text_en', ''),
-        'image_url': raw.get('image_url') or raw.get('image_front_url', ''),
-        'url': f'https://world.openfoodfacts.org/product/{product_id}',
-        'nutrition': nutrition,
-        'labels': raw.get('labels', ''),
-        'categories': raw.get('categories', ''),
-        'quantity': raw.get('quantity', ''),
-        'serving_size': raw.get('serving_size', ''),
-        'nutriscore': raw.get('nutriscore_grade', '').upper(),
-        'countries_tags': raw.get('countries_tags', []),
-        '_raw': raw,
-    }
-
-
-_SEARCH_HEADERS = {'User-Agent': 'OjasFuel/1.0'}
-
-_NUTRIMENT_MAP = {
     'Energy (kcal)': 'energy-kcal_100g',
     'Energy (kJ)': 'energy-kj_100g',
     'Protein (g)': 'proteins_100g',
@@ -166,7 +72,7 @@ _NUTRIMENT_MAP = {
     'Vitamin A (µg)': 'vitamin-a_100g',
     'Vitamin B1 (mg)': 'vitamin-b1_100g',
     'Vitamin B2 (mg)': 'vitamin-b2_100g',
-    'Vitamin B3 (mg)': 'vitamin-b3_100g',
+    'Vitamin B3 (mg)': 'vitamin-pp_100g',
     'Vitamin B6 (mg)': 'vitamin-b6_100g',
     'Vitamin B9 (µg)': 'vitamin-b9_100g',
     'Vitamin B12 (µg)': 'vitamin-b12_100g',
@@ -178,6 +84,103 @@ _NUTRIMENT_MAP = {
     'Alcohol (g)': 'alcohol_100g',
     'Caffeine (mg)': 'caffeine_100g',
 }
+
+# grams → display unit
+_UNIT_FACTOR = {'mg': 1000.0, 'µg': 1_000_000.0}
+
+
+def _display_unit(display_name: str) -> str:
+    return display_name.rsplit('(', 1)[-1].rstrip(')') if '(' in display_name else ''
+
+
+NUTRITION_GROUPS = {
+    'Macronutrients': [
+        'Energy (kcal)', 'Energy (kJ)', 'Protein (g)', 'Fat (g)',
+        'Saturated Fat (g)', 'Carbohydrates (g)', 'Sugars (g)',
+        'Fiber (g)', 'Cholesterol (mg)', 'Alcohol (g)',
+    ],
+    'Minerals': [
+        'Sodium (mg)', 'Salt (g)', 'Potassium (mg)', 'Calcium (mg)',
+        'Iron (mg)', 'Magnesium (mg)', 'Phosphorus (mg)', 'Zinc (mg)',
+        'Manganese (mg)', 'Copper (mg)', 'Selenium (µg)', 'Iodine (µg)',
+    ],
+    'Vitamins': [
+        'Vitamin A (µg)', 'Vitamin B1 (mg)', 'Vitamin B2 (mg)',
+        'Vitamin B3 (mg)', 'Vitamin B6 (mg)', 'Vitamin B9 (µg)',
+        'Vitamin B12 (µg)', 'Vitamin C (mg)', 'Vitamin D (µg)',
+        'Vitamin E (mg)', 'Vitamin K (µg)',
+    ],
+    'Other': ['Caffeine (mg)'],
+}
+
+
+def extract_nutrition(nutriments: dict) -> dict:
+    """Convert an OFF `nutriments` dict into {display_name: value} in display units."""
+    nutriments = nutriments or {}
+    nutrition = {}
+    for display_name, key in NUTRITION_FIELDS.items():
+        val = nutriments.get(key)
+        if val is None and display_name == 'Energy (kcal)':
+            # Some products only have kJ → derive kcal
+            kj = nutriments.get('energy-kj_100g')
+            if kj is None and nutriments.get('energy_100g_unit', 'kJ') in ('kJ', None):
+                kj = nutriments.get('energy_100g')
+            if kj is not None:
+                try:
+                    val = float(kj) / 4.184
+                except (TypeError, ValueError):
+                    val = None
+        if val is None:
+            continue
+        try:
+            num = float(val)
+        except (TypeError, ValueError):
+            continue
+        num *= _UNIT_FACTOR.get(_display_unit(display_name), 1.0)
+        nutrition[display_name] = round(num, 3)
+    # Derive sodium from salt (and vice versa) when only one is present
+    if 'Sodium (mg)' not in nutrition and 'Salt (g)' in nutrition:
+        nutrition['Sodium (mg)'] = round(nutrition['Salt (g)'] / 2.5 * 1000, 1)
+    return nutrition
+
+
+def _brands_str(b) -> str:
+    if isinstance(b, (list, tuple)):
+        return ', '.join(str(x) for x in b if x)
+    return b or ''
+
+
+def format_product(raw: dict) -> dict:
+    """Normalise a raw OFF product dict into the app's standard format."""
+    product_id = raw.get('code') or raw.get('id') or 'N/A'
+    return {
+        'id': product_id,
+        'name': raw.get('product_name') or raw.get('product_name_en') or raw.get('product_name_es') or 'Unknown',
+        'brand': _brands_str(raw.get('brands', '')),
+        'ingredients': (raw.get('ingredients_text') or raw.get('ingredients_text_en')
+                        or raw.get('ingredients_text_es') or ''),
+        'image_url': raw.get('image_url') or raw.get('image_front_url', ''),
+        'url': f'https://world.openfoodfacts.org/product/{product_id}',
+        'nutrition': extract_nutrition(raw.get('nutriments', {})),
+        'labels': _brands_str(raw.get('labels', '')),
+        'categories': _brands_str(raw.get('categories', '')),
+        'categories_tags': raw.get('categories_tags', []),
+        'quantity': raw.get('quantity', ''),
+        'serving_size': raw.get('serving_size', ''),
+        'nutriscore': (raw.get('nutriscore_grade') or '').upper(),
+        'countries_tags': raw.get('countries_tags', []),
+        '_off_tags': _parse_off_tags(raw.get('ingredients_analysis_tags', [])),
+        '_raw': raw,
+    }
+
+
+_SEARCH_HEADERS = {'User-Agent': 'OjasFuel/1.0'}
+_SEARCH_FIELDS = ','.join([
+    'code', 'product_name', 'brands', 'quantity', 'serving_size', 'labels',
+    'ingredients_text', 'nutriments', 'ingredients_analysis_tags',
+    'categories_tags', 'countries_tags', 'image_url', 'nutriscore_grade',
+])
+
 
 
 def _parse_off_tags(tags: list[str]) -> dict:
@@ -194,44 +197,20 @@ def _parse_off_tags(tags: list[str]) -> dict:
         is_vegetarian = True
     elif 'en:non-vegetarian' in tags_set:
         is_vegetarian = False
-    return {'is_vegan': is_vegan, 'is_vegetarian': is_vegetarian}
+    return {
+        'is_vegan': is_vegan,
+        'is_vegetarian': is_vegetarian,
+        # OFF itself is unsure (incomplete ingredient list) → never claim vegan
+        'vegan_uncertain': bool(tags_set & {'en:maybe-vegan', 'en:vegan-status-unknown'}),
+        'vegetarian_uncertain': bool(tags_set & {'en:maybe-vegetarian', 'en:vegetarian-status-unknown'}),
+    }
 
 
 def _format_search_hit(hit: dict) -> dict:
     """Format a product from search.openfoodfacts.org /search response."""
-    nutriments = hit.get('nutriments', {})
-    nutrition = {}
-    for display_name, key in _NUTRIMENT_MAP.items():
-        val = nutriments.get(key)
-        if val is None:
-            val = nutriments.get(key.replace('_100g', ''))
-        if val is not None:
-            try:
-                nutrition[display_name] = float(val)
-            except (TypeError, ValueError):
-                pass
-
-    product_id = hit.get('code') or hit.get('id', 'N/A')
-    off_tags = _parse_off_tags(hit.get('ingredients_analysis_tags', []))
-
-    return {
-        'id': product_id,
-        'name': hit.get('product_name') or hit.get('product_name_en', 'Unknown'),
-        'brand': hit.get('brands', ''),
-        'ingredients': '',  # not available from search API — fetched on Detail load
-        'image_url': hit.get('image_url') or hit.get('image_front_url', ''),
-        'url': f'https://world.openfoodfacts.org/product/{product_id}',
-        'nutrition': nutrition,
-        'labels': hit.get('labels', ''),
-        'categories': hit.get('categories', ''),
-        'quantity': hit.get('quantity', ''),
-        'serving_size': hit.get('serving_size', ''),
-        'nutriscore': (hit.get('nutriscore_grade') or '').upper(),
-        'countries_tags': hit.get('countries_tags', []),
-        '_off_tags': off_tags,
-        '_needs_full_load': True,
-        '_raw': hit,
-    }
+    product = format_product(hit)
+    product['_needs_full_load'] = not bool(product['ingredients'])
+    return product
 
 
 def search_by_name(query: str, page_size: int = 20, country_code: str | None = None) -> list[dict]:
@@ -242,7 +221,7 @@ def search_by_name(query: str, page_size: int = 20, country_code: str | None = N
     Fallback: openfoodfacts SDK on country-specific subdomain
     """
     last_error = None
-    params = {'q': query, 'page_size': page_size}
+    params = {'q': query, 'page_size': page_size, 'fields': _SEARCH_FIELDS}
     if country_code:
         params['cc'] = country_code  # honoured by search API when supported
 
@@ -274,6 +253,65 @@ def search_by_name(query: str, page_size: int = 20, country_code: str | None = N
     raise RuntimeError(f"Search failed (both endpoints unavailable): {last_error}")
 
 
+class OFFConnectionError(Exception):
+    """Raised when Open Food Facts could not be reached (network/timeout/5xx)."""
+
+
+_PROD_URL = 'https://world.openfoodfacts.org'
+_STAGING_URL = 'https://world.openfoodfacts.net'
+
+
+def _secret(name: str) -> str | None:
+    val = os.environ.get(name)
+    if val:
+        return val
+    try:
+        import streamlit as st
+        return st.secrets.get(name)  # type: ignore[no-any-return]
+    except Exception:
+        return None
+
+
+def _off_base_url() -> str:
+    return _STAGING_URL if (_secret('OFF_ENV') or '').lower() == 'staging' else _PROD_URL
+
+
+# off nutriment key (without _100g) → display unit
+_WRITE_UNITS = {k[:-5]: _display_unit(d) or 'g' for d, k in NUTRITION_FIELDS.items()}
+_WRITE_UNITS['energy-kcal'] = 'kcal'
+_WRITE_UNITS['energy-kj'] = 'kJ'
+
+
+def _nutrition_to_write_fields(nutrition: dict) -> dict:
+    """Convert {'nutriment_sodium_100g': 400 (mg)} → OFF write params."""
+    out = {}
+    for key, val in (nutrition or {}).items():
+        if val is None or not str(val).strip():
+            continue
+        name = key
+        if name.startswith('nutriment_'):
+            name = name[len('nutriment_'):]
+        if name.endswith('_100g'):
+            name = name[:-5]
+        try:
+            num = float(str(val).replace(',', '.'))
+        except ValueError:
+            continue
+        unit = _WRITE_UNITS.get(name, 'g')
+        out[f'nutriment_{name}'] = f'{num:g}'
+        out[f'nutriment_{name}_unit'] = unit
+    if out:
+        out['nutrition_data_per'] = '100g'
+    return out
+
+
+def _json_or_none(resp):
+    try:
+        return resp.json()
+    except Exception:
+        return None
+
+
 def submit_product(
     barcode: str,
     name: str,
@@ -284,23 +322,26 @@ def submit_product(
     nutrition: dict | None = None,
     photo_bytes: bytes | None = None,
 ) -> dict:
-    """Submit a new product to Open Food Facts anonymously.
+    """Submit a product to Open Food Facts.
 
-    Returns {'ok': True} on success or {'ok': False, 'error': str} on failure.
-    Uses the anonymous OFF account (user_id=off, password=off).
-    nutrition keys must follow OFF format: e.g. 'nutriment_energy-kcal_100g'.
-    photo_bytes is uploaded to the front image field after the main submit.
+    nutrition: keys like 'nutriment_sodium_100g', values in the DISPLAY unit
+    (kcal, kJ, g, mg, µg); converted to OFF's nutriment_<n> + _unit format.
+    Credentials: OFF_USER / OFF_PASSWORD (env or st.secrets), else anonymous off/off.
+    OFF_ENV=staging targets world.openfoodfacts.net.
+
+    Returns {'ok': bool, 'error': str|None, 'photo_ok': bool|None, 'url': str}.
     """
-    import requests
+    base = _off_base_url()
+    code = normalize_barcode(barcode)
+    user = _secret('OFF_USER') or 'off'
+    password = _secret('OFF_PASSWORD') or 'off'
+    staging = base == _STAGING_URL
+    http_auth = ('off', 'off') if staging else None
+    headers = {'User-Agent': 'OjasFuel/1.0'}
+    creds = {'user_id': user, 'password': password}
+    result = {'ok': False, 'error': None, 'photo_ok': None, 'url': f'{base}/product/{code}'}
 
-    _headers = {'User-Agent': 'OjasFuel/1.0'}
-    _auth = {'user_id': 'off', 'password': 'off'}
-
-    data = {
-        'code': barcode.strip(),
-        'product_name': name.strip(),
-        **_auth,
-    }
+    data = {'code': code, 'product_name': name.strip(), **creds}
     if brand.strip():
         data['brands'] = brand.strip()
     if quantity.strip():
@@ -308,49 +349,88 @@ def submit_product(
     if ingredients.strip():
         data['ingredients_text'] = ingredients.strip()
     if countries.strip():
-        data['countries_tags'] = countries.strip()
-    if nutrition:
-        for key, val in nutrition.items():
-            if val is not None and str(val).strip():
-                data[key] = str(val)
+        data['countries'] = countries.strip()
+    data.update(_nutrition_to_write_fields(nutrition or {}))
 
     try:
-        resp = requests.post(
-            'https://world.openfoodfacts.org/cgi/product_jqm2.pl',
-            data=data,
-            timeout=15,
-            headers=_headers,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        if body.get('status') != 1:
-            return {'ok': False, 'error': body.get('status_verbose', 'Unknown error')}
-    except Exception as exc:
-        return {'ok': False, 'error': str(exc)}
+        resp = requests.post(f'{base}/cgi/product_jqm2.pl', data=data, timeout=20,
+                             headers=headers, auth=http_auth)
+    except requests.RequestException as exc:
+        result['error'] = f'Connection error: {exc}'
+        return result
+    body = _json_or_none(resp)
+    if body is None:
+        result['error'] = f'Unexpected response from Open Food Facts (HTTP {resp.status_code}, not JSON)'
+        return result
+    if not resp.ok or body.get('status') != 1:
+        result['error'] = body.get('status_verbose') or f'HTTP {resp.status_code}'
+        return result
+    result['ok'] = True
 
     if photo_bytes:
         try:
-            requests.post(
-                'https://world.openfoodfacts.org/cgi/product_image_upload.pl',
-                data={'code': barcode.strip(), 'imagefield': 'front_en', **_auth},
+            presp = requests.post(
+                f'{base}/cgi/product_image_upload.pl',
+                data={'code': code, 'imagefield': 'front_en', **creds},
                 files={'imgupload_front_en': ('front.jpg', photo_bytes, 'image/jpeg')},
-                timeout=30,
-                headers=_headers,
+                timeout=40, headers=headers, auth=http_auth,
             )
-        except Exception:
-            pass
+            pbody = _json_or_none(presp)
+            result['photo_ok'] = bool(presp.ok and pbody is not None
+                                      and pbody.get('status') in ('status ok', 1, 'ok'))
+        except requests.RequestException:
+            result['photo_ok'] = False
 
-    return {'ok': True}
+    return result
+
+
+def _fetch_barcode_once(code: str) -> dict | None:
+    """GET one barcode. None = not found. Raises requests.RequestException on network trouble."""
+    resp = requests.get(
+        f'https://world.openfoodfacts.org/api/v2/product/{code}.json',
+        headers=_SEARCH_HEADERS, timeout=(6, 12),
+    )
+    if resp.status_code == 404:
+        body = _json_or_none(resp)
+        if body is not None:
+            return None
+    if resp.status_code >= 500 or resp.status_code == 429:
+        raise requests.HTTPError(f'HTTP {resp.status_code}')
+    body = _json_or_none(resp)
+    if body is None:
+        raise requests.RequestException('non-JSON response')
+    if body.get('status') == 1 and isinstance(body.get('product'), dict):
+        prod = body['product']
+        prod.setdefault('code', code)
+        return prod
+    return None
 
 
 def search_by_barcode(barcode: str) -> dict | None:
-    """Look up a product by EAN/UPC barcode. Returns formatted product or None."""
-    barcode = barcode.strip()
-    try:
-        result = _api.product.get(barcode)
-        if result and isinstance(result, dict):
-            # SDK returns the product dict directly (not wrapped in status/product)
-            return format_product(result)
-    except Exception:
-        pass
+    """Look up a product by barcode (tries UPC/EAN variants).
+
+    Returns a formatted product, None if genuinely not found, and raises
+    OFFConnectionError if every attempt failed due to network problems.
+    """
+    variants = barcode_variants(barcode)
+    net_failures = 0
+    attempts = 0
+    last_exc = None
+    for code in variants:
+        for attempt in range(2):  # 1 retry on network error
+            attempts += 1
+            try:
+                raw = _fetch_barcode_once(code)
+                break
+            except requests.RequestException as exc:
+                last_exc = exc
+                raw = None
+                if attempt == 1:
+                    net_failures += 1
+        else:
+            continue
+        if raw:
+            return format_product(raw)
+    if variants and net_failures == len(variants):
+        raise OFFConnectionError(str(last_exc))
     return None

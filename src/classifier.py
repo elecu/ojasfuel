@@ -9,7 +9,16 @@ from src.blocklists import (
     ALCOHOL, CAFFEINE, MUSHROOMS, ONION, GARLIC, JAIN_EXTRAS,
     ALLERGIES_NUTS, ALLERGIES_PEANUTS, ALLERGIES_SOY,
     ALLERGIES_MUSTARD, ALLERGIES_SESAME, ALLERGIES_GLUTEN,
+    PLANT_BASED_EXCEPTIONS,
 )
+
+_PLANT_RE = [re.compile(p, re.IGNORECASE) for p in PLANT_BASED_EXCEPTIONS]
+
+
+def _strip_plant_based(text: str) -> str:
+    for rx in _PLANT_RE:
+        text = rx.sub(' ', text)
+    return text
 
 
 def _find_matches(text: str, patterns: list[str]) -> list[str]:
@@ -17,7 +26,7 @@ def _find_matches(text: str, patterns: list[str]) -> list[str]:
     found = []
     for pat in patterns:
         m = re.search(pat, text, re.IGNORECASE)
-        if m:
+        if m and m.group(0).lower() not in (f.lower() for f in found):
             found.append(m.group(0))
     return found
 
@@ -48,6 +57,7 @@ class ProductClassifier:
                 'is_vegetarian': None,
                 'passes_filters': None,
                 'violations': [],
+                'violation_kinds': [],
                 'confidence': 0.0,
                 'reason': 'No ingredients data available',
                 'animal_products_found': [],
@@ -59,8 +69,9 @@ class ProductClassifier:
         text = ingredients_text.lower()
 
         meat_found = _find_matches(text, MEAT_FISH)
-        dairy_found = _find_matches(text, DAIRY)
-        eggs_found = _find_matches(text, EGGS)
+        animal_text = _strip_plant_based(text)
+        dairy_found = _find_matches(animal_text, DAIRY)
+        eggs_found = _find_matches(animal_text, EGGS)
         gelatin_found = _find_matches(text, GELATIN)
         honey_found = _find_matches(text, HONEY)
 
@@ -90,102 +101,107 @@ class ProductClassifier:
 
         # --- Apply user filters ---
         violations = []
+        kinds = []
+
+        def _add(msg, kind):
+            violations.append(msg)
+            kinds.append(kind)
         mode = filters.get('mode', 'vegetarian')
 
         if mode == 'vegan' and not is_vegan:
             if not is_vegetarian:
-                violations.append("Contains meat/fish")
+                _add("Contains meat/fish", 'diet')
             if dairy_found:
-                violations.append(f"Contains dairy: {', '.join(dairy_found[:2])}")
+                _add(f"Contains dairy: {', '.join(dairy_found[:2])}", 'diet')
             if eggs_found:
-                violations.append(f"Contains eggs: {', '.join(eggs_found[:2])}")
+                _add(f"Contains eggs: {', '.join(eggs_found[:2])}", 'diet')
             if honey_found:
-                violations.append(f"Contains honey")
+                _add(f"Contains honey", 'diet')
         elif mode == 'vegetarian' and not is_vegetarian:
-            violations.append(f"Contains meat/fish: {', '.join(meat_found[:2])}")
+            _add(f"Contains meat/fish: {', '.join(meat_found[:2])}", 'diet')
 
         # Lacto/Ovo variants
         if filters.get('ovo') and dairy_found:
-            violations.append(f"Ovo-vegetarian: contains dairy: {', '.join(dairy_found[:2])}")
+            _add(f"Ovo-vegetarian: contains dairy: {', '.join(dairy_found[:2])}", 'diet')
         if filters.get('lacto') and eggs_found:
-            violations.append(f"Lacto-vegetarian: contains eggs: {', '.join(eggs_found[:2])}")
+            _add(f"Lacto-vegetarian: contains eggs: {', '.join(eggs_found[:2])}", 'diet')
 
         # Strict egg traces
         if filters.get('strict_egg_traces'):
             traces = _find_matches(text, EGGS_TRACES)
             if traces:
-                violations.append("Contains egg traces (strict mode active)")
+                _add("Contains egg traces (strict mode active)", 'restriction')
 
         # Additional restrictions
         if filters.get('no_alcohol'):
             matches = _find_matches(text, ALCOHOL)
             if matches:
-                violations.append(f"Contains alcohol: {', '.join(matches[:2])}")
+                _add(f"Contains alcohol: {', '.join(matches[:2])}", 'restriction')
 
         if filters.get('no_caffeine'):
             matches = _find_matches(text, CAFFEINE)
             if matches:
-                violations.append(f"Contains caffeine: {', '.join(matches[:2])}")
+                _add(f"Contains caffeine: {', '.join(matches[:2])}", 'restriction')
 
         if filters.get('no_mushrooms'):
             matches = _find_matches(text, MUSHROOMS)
             if matches:
-                violations.append(f"Contains mushrooms: {', '.join(matches[:2])}")
+                _add(f"Contains mushrooms: {', '.join(matches[:2])}", 'restriction')
 
         if filters.get('no_onion'):
             matches = _find_matches(text, ONION)
             if matches:
-                violations.append(f"Contains onion: {', '.join(matches[:2])}")
+                _add(f"Contains onion: {', '.join(matches[:2])}", 'restriction')
 
         if filters.get('no_garlic'):
             matches = _find_matches(text, GARLIC)
             if matches:
-                violations.append(f"Contains garlic: {', '.join(matches[:2])}")
+                _add(f"Contains garlic: {', '.join(matches[:2])}", 'restriction')
 
         if filters.get('no_gelatin') and gelatin_found:
-            violations.append(f"Contains gelatin: {', '.join(gelatin_found[:2])}")
+            _add(f"Contains gelatin: {', '.join(gelatin_found[:2])}", 'restriction')
 
         if filters.get('jain'):
             extras = _find_matches(text, JAIN_EXTRAS)
             if extras:
-                violations.append(f"Jain diet: contains root vegetables: {', '.join(extras[:3])}")
+                _add(f"Jain diet: contains root vegetables: {', '.join(extras[:3])}", 'restriction')
             garlic_m = _find_matches(text, GARLIC)
             onion_m = _find_matches(text, ONION)
             if garlic_m:
-                violations.append(f"Jain diet: contains garlic")
+                _add(f"Jain diet: contains garlic", 'restriction')
             if onion_m:
-                violations.append(f"Jain diet: contains onion")
+                _add(f"Jain diet: contains onion", 'restriction')
 
         # Allergies
         if filters.get('allergies_nuts'):
             matches = _find_matches(text, ALLERGIES_NUTS)
             if matches:
-                violations.append(f"Tree nut allergy: {', '.join(matches[:2])}")
+                _add(f"Tree nut allergy: {', '.join(matches[:2])}", 'allergy')
 
         if filters.get('allergies_peanuts'):
             matches = _find_matches(text, ALLERGIES_PEANUTS)
             if matches:
-                violations.append(f"Peanut allergy: {', '.join(matches[:2])}")
+                _add(f"Peanut allergy: {', '.join(matches[:2])}", 'allergy')
 
         if filters.get('allergies_soy'):
             matches = _find_matches(text, ALLERGIES_SOY)
             if matches:
-                violations.append(f"Soy allergy: {', '.join(matches[:2])}")
+                _add(f"Soy allergy: {', '.join(matches[:2])}", 'allergy')
 
         if filters.get('allergies_mustard'):
             matches = _find_matches(text, ALLERGIES_MUSTARD)
             if matches:
-                violations.append(f"Mustard allergy: {', '.join(matches[:2])}")
+                _add(f"Mustard allergy: {', '.join(matches[:2])}", 'allergy')
 
         if filters.get('allergies_sesame'):
             matches = _find_matches(text, ALLERGIES_SESAME)
             if matches:
-                violations.append(f"Sesame allergy: {', '.join(matches[:2])}")
+                _add(f"Sesame allergy: {', '.join(matches[:2])}", 'allergy')
 
         if filters.get('allergies_gluten'):
             matches = _find_matches(text, ALLERGIES_GLUTEN)
             if matches:
-                violations.append(f"Gluten/wheat allergy: {', '.join(matches[:2])}")
+                _add(f"Gluten/wheat allergy: {', '.join(matches[:2])}", 'allergy')
 
         passes_filters = len(violations) == 0
 
@@ -194,6 +210,7 @@ class ProductClassifier:
             'is_vegetarian': is_vegetarian,
             'passes_filters': passes_filters,
             'violations': violations,
+            'violation_kinds': kinds,
             'confidence': confidence,
             'reason': reason,
             'animal_products_found': animal_products_found,

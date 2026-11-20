@@ -16,8 +16,27 @@ _VEGAN_GROUPS = {
     "Frutas",
     "Leguminosas",
     "Alimentos Libres en Energía",
-    "Bebidas Alcohólicas",
 }
+
+# Alcoholic drinks: meat-free, but some contain egg/dairy (rompope, cream
+# liqueurs) → vegetarian, vegan decided by the ingredient classifier.
+_GROUP_RULES = {
+    "Bebidas Alcohólicas": (None, True),
+}
+
+# smae_1827..smae_1870 come from the PDF's mixed-dishes table, which
+# scripts/parse_smae.py mis-parsed (shifted columns, truncated names, wrong
+# group — e.g. "Frijoles puercos" filed as an alcoholic drink). Their
+# nutrition values are garbage, so they are excluded until the parser is fixed.
+_CORRUPT_ID_RANGE = (1827, 1870)
+
+
+def _is_corrupt(entry: dict) -> bool:
+    try:
+        n = int(str(entry.get("id", "")).rsplit("_", 1)[-1])
+    except ValueError:
+        return False
+    return _CORRUPT_ID_RANGE[0] <= n <= _CORRUPT_ID_RANGE[1]
 
 # Groups that depend on the subgroup for vegan classification
 _VEGAN_SUBGROUP_RULES = {
@@ -55,6 +74,8 @@ def _classify_by_group(group: str, subgroup: str | None) -> tuple[bool | None, b
     """Return (is_vegan, is_vegetarian) based on food group."""
     if group in _VEGAN_GROUPS:
         return True, True
+    if group in _GROUP_RULES:
+        return _GROUP_RULES[group]
     key = (group, subgroup)
     if key in _VEGAN_SUBGROUP_RULES:
         return _VEGAN_SUBGROUP_RULES[key]
@@ -68,7 +89,7 @@ def _classify_by_group(group: str, subgroup: str | None) -> tuple[bool | None, b
 @lru_cache(maxsize=1)
 def _load_db() -> list[dict]:
     with open(_DB_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        return [e for e in json.load(f) if not _is_corrupt(e)]
 
 
 def _smae_to_product(entry: dict) -> dict:
@@ -77,9 +98,21 @@ def _smae_to_product(entry: dict) -> dict:
     subgroup = entry.get("subgroup")
     is_vegan, is_vegetarian = _classify_by_group(group, subgroup)
 
-    # Build nutrition dict using the same display keys as NUTRITION_FIELDS in api_client.py
+    net_w = entry.get("net_weight_g")
+    try:
+        net_w = float(net_w) if net_w else None
+    except (TypeError, ValueError):
+        net_w = None
+    if net_w is not None and net_w <= 0:
+        net_w = None
+    factor = 100.0 / net_w if net_w else 1.0
+
+    # SMAE values are PER PORTION → normalise to per 100 g using net_weight_g
     nutrition = {}
-    _add = lambda key, val: nutrition.update({key: val}) if val is not None else None
+
+    def _add(key, val):
+        if val is not None:
+            nutrition[key] = round(val * factor, 2)
 
     _add("Energy (kcal)", entry.get("energy_kcal"))
     _add("Protein (g)", entry.get("protein_g"))
@@ -98,8 +131,11 @@ def _smae_to_product(entry: dict) -> dict:
     _add("Alcohol (g)", entry.get("alcohol_g"))
 
     portion = f"{entry.get('portion_amount', '')} {entry.get('portion_unit', '')}".strip()
-    net_w = entry.get("net_weight_g")
-    serving = f"{net_w}g" if net_w else ""
+    if net_w:
+        nw = int(net_w) if float(net_w).is_integer() else net_w
+        serving = f"{portion} ({nw} g)" if portion else f"{nw} g"
+    else:
+        serving = portion
 
     # Use food name + group as ingredients hint so classifier.py blocklists work
     # e.g. "Alón de pollo" → classifier matches "pollo" → not vegan
@@ -133,6 +169,10 @@ def _smae_to_product(entry: dict) -> dict:
         "_needs_full_load": False,
         "_raw": entry,
         "_source": "smae",
+        "_smae_portion_g": net_w,
+        "_smae_group": group,
+        "_smae_subgroup": subgroup,
+        **({} if net_w else {"_per_portion": True}),
     }
 
 
