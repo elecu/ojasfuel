@@ -2,20 +2,19 @@
 OjasFuel — Equivalents Finder page
 """
 
-import re
 import streamlit as st
-import sys
-sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 
 from src.i18n import t, init_session
 from src.theme import inject_theme
 from src.api_client import search_by_name as _off_search
 from src.smae_client import search_by_name as _smae_search
-from src.classifier import ProductClassifier
+from src.filtering import classify_results
+from src.ui_helpers import tn, nutrient_unit, fmt_value, parse_serving_grams
 
 
-def _search(query: str, page_size: int, is_mexico: bool) -> list[dict]:
-    """Search SMAE first (Mexico) then OFF, deduplicating by name."""
+def _search(query: str, page_size: int, is_mexico: bool, cc: str | None, settings: dict) -> list[dict]:
+    """Search SMAE first (Mexico) then OFF, dedupe by name, drop products
+    that fail the user's diet filter (so meat never shows up)."""
     results = []
     seen_names = set()
     if is_mexico:
@@ -24,35 +23,31 @@ def _search(query: str, page_size: int, is_mexico: bool) -> list[dict]:
             if key not in seen_names:
                 seen_names.add(key)
                 results.append(p)
-    for p in _off_search(query, page_size=page_size):
+    for p in _off_search(query, page_size=page_size, country_code=cc):
         key = p['name'].lower()
         if key not in seen_names:
             seen_names.add(key)
             results.append(p)
+    results = classify_results(results, settings)
     return results[:page_size]
+
+
+def _auto_query(product: dict) -> str:
+    """Most specific category (OFF) or SMAE group; fallback first 2 words of name."""
+    tags = product.get('categories_tags') or []
+    if tags:
+        tag = tags[-1]
+        tag = tag.split(':', 1)[-1] if ':' in tag else tag
+        q = tag.replace('-', ' ').strip()
+        if q:
+            return q
+    if product.get('_smae_group'):
+        return str(product['_smae_group'])
+    return ' '.join((product.get('name') or '').split()[:2])
 
 st.set_page_config(page_title='OjasFuel — Equivalents', page_icon='🔄', layout='wide')
 init_session()
 inject_theme()
-classifier = ProductClassifier()
-
-# ── Nutrient label translation map ───────────────────────────────────────────
-_NUTRIENT_KEYS = {
-    'Energy (kcal)':      'nutrient_energy_kcal',
-    'Energy (kJ)':        'nutrient_energy_kj',
-    'Protein (g)':        'nutrient_protein',
-    'Fat (g)':            'nutrient_fat',
-    'Saturated Fat (g)':  'nutrient_saturated_fat',
-    'Carbohydrates (g)':  'nutrient_carbohydrates',
-    'Sugars (g)':         'nutrient_sugars',
-    'Fiber (g)':          'nutrient_fiber',
-    'Sodium (mg)':        'nutrient_sodium',
-    'Salt (g)':           'nutrient_salt',
-}
-
-def _tn(nutrient_key: str) -> str:
-    return t(_NUTRIENT_KEYS[nutrient_key]) if nutrient_key in _NUTRIENT_KEYS else nutrient_key
-
 
 # ── Match priority config ─────────────────────────────────────────────────────
 _MATCH_MODES = {
@@ -88,30 +83,6 @@ def _passes_threshold(orig: dict, cand: dict, macros: list[tuple[str, float]], t
     return True
 
 
-def parse_serving_grams(product: dict) -> tuple[float | None, str]:
-    """
-    Try to get serving size in grams from a product dict.
-    Returns (grams, display_label) or (None, '').
-    Checks: serving_size string, then _raw.serving_quantity numeric field.
-    """
-    srv_str = product.get('serving_size', '') or ''
-    m = re.search(r'\(?\s*(\d+(?:\.\d+)?)\s*g\s*\)?', srv_str, re.IGNORECASE)
-    if m:
-        return float(m.group(1)), srv_str
-
-    raw = product.get('_raw', {}) or {}
-    qty = raw.get('serving_quantity')
-    if qty:
-        try:
-            g = float(qty)
-            label = srv_str or f"{g}g"
-            return g, label
-        except (TypeError, ValueError):
-            pass
-
-    return None, ''
-
-
 def _equiv_grams_for_macro(orig_nutr: dict, alt_nutr: dict, macro: str, orig_grams: float) -> float | None:
     """How many grams of alt product match `orig_grams` of orig for a single macro."""
     orig_val = orig_nutr.get(macro, 0) or 0
@@ -134,14 +105,22 @@ if not original:
     st.warning(t('no_product_selected'))
     st.stop()
 
+# Reset stale results when the original product changes
+_orig_id = original.get('id') or original.get('name')
+if st.session_state.get('equiv_orig_id') != _orig_id:
+    st.session_state['equiv_orig_id'] = _orig_id
+    st.session_state.pop('equiv_alternatives', None)
+    st.session_state.pop('equiv_auto_results', None)
+
 orig_nutrition = original.get('nutrition', {})
 orig_name = original.get('name') or 'Original'
 orig_brand = original.get('brand') or ''
 
 settings = st.session_state['settings']
-threshold = settings.get('equivalents_threshold', 0.25)
+threshold = settings.get('equivalents_threshold', 0.15)
 cs = settings.get('countries', {})
-is_mexico = (cs.get('cc') if isinstance(cs, dict) else None) == 'mx'
+cc = cs.get('cc') if isinstance(cs, dict) else None
+is_mexico = cc == 'mx'
 
 # ── Original product summary ──────────────────────────────────────────────────
 st.subheader(t('original_product'))
@@ -152,9 +131,8 @@ with st.container(border=True):
     cols = st.columns(len(key_macros))
     for col, k in zip(cols, key_macros):
         if k in orig_nutrition:
-            label = _tn(k).split(' (')[0]
-            unit = k.split('(')[1].rstrip(')')
-            col.metric(label, f"{orig_nutrition[k]} {unit}")
+            label = tn(k).split(' (')[0]
+            col.metric(label, f"{fmt_value(orig_nutrition[k])} {nutrient_unit(k)}")
 
 orig_kcal = orig_nutrition.get('Energy (kcal)', 0)
 
@@ -197,7 +175,7 @@ alt_query = st.text_input(t('search_alternative'), placeholder=orig_name)
 if st.button(t('search_button'), key='alt_search') and alt_query.strip():
     with st.spinner(t('searching')):
         try:
-            alts = _search(alt_query.strip(), page_size=10, is_mexico=is_mexico)
+            alts = _search(alt_query.strip(), page_size=10, is_mexico=is_mexico, cc=cc, settings=settings)
             st.session_state['equiv_alternatives'] = alts
         except Exception as e:
             st.error(str(e))
@@ -242,7 +220,7 @@ if alternatives:
         # Per-macro breakdown (always shown so user sees how each macro matches)
         per_macro_cols = st.columns(len(active_weights))
         for col, (macro, w) in zip(per_macro_cols, active_weights):
-            label = _tn(macro).split(' (')[0]
+            label = tn(macro).split(' (')[0]
             g = per_macro_equiv.get(macro)
             if g is not None:
                 srv_note = f" · {per_macro_equiv[macro] / alt_srv_g:.1f}×" if alt_srv_g and alt_srv_g > 0 else ""
@@ -287,9 +265,9 @@ if alternatives:
             macro_warnings.append((field, diff_pct))
 
         row = st.columns([3, 2, 2, 2])
-        row[0].write(_tn(field))
-        row[1].write(f"{o_val}")
-        row[2].write(f"{a_val}")
+        row[0].write(tn(field))
+        row[1].write(fmt_value(o_val))
+        row[2].write(fmt_value(a_val))
         diff_str = f"+{diff_pct:.1f}%" if diff_pct > 0 else f"{diff_pct:.1f}%"
         if over_threshold:
             row[3].markdown(f"⚠️ **{diff_str}**")
@@ -299,7 +277,7 @@ if alternatives:
     if macro_warnings:
         st.warning(f"**{t('macro_mismatches', pct=int(threshold * 100))}**")
         for field, pct in macro_warnings:
-            st.caption(t('macro_warning', nutrient=_tn(field), pct=abs(pct)))
+            st.caption(t('macro_warning', nutrient=tn(field), pct=abs(pct)))
     else:
         st.success(t('good_match'))
 
@@ -311,17 +289,23 @@ st.caption(t('auto_find_caption', name=orig_name, pct=int(threshold * 100)))
 st.caption(f"▸ {t('match_priority')}: **{selected_mode_label}**")
 
 if st.button(t('find_auto'), type='secondary'):
-    with st.spinner(t('searching')):
-        try:
-            candidates = _search(orig_name.split(' ')[0], page_size=20, is_mexico=is_mexico)
-        except Exception as e:
-            st.error(str(e))
-            candidates = []
-
     has_orig_data = any(orig_nutrition.get(m, 0) for m, _ in active_weights)
-    if has_orig_data:
+    if not has_orig_data:
+        st.session_state.pop('equiv_auto_results', None)
+        st.warning(t('no_macro_data'))
+    else:
+        with st.spinner(t('searching')):
+            try:
+                candidates = _search(_auto_query(original), page_size=20,
+                                     is_mexico=is_mexico, cc=cc, settings=settings)
+            except Exception as e:
+                st.error(str(e))
+                candidates = []
+
         scored = []
         for c in candidates:
+            if c.get('id') and c.get('id') == original.get('id'):
+                continue
             c_nutr = c.get('nutrition', {})
             if not c_nutr.get('Energy (kcal)'):
                 continue
@@ -330,40 +314,47 @@ if st.button(t('find_auto'), type='secondary'):
             score, diffs = _macro_score(orig_nutrition, c_nutr, active_weights)
             scored.append((score, diffs, c))
         scored.sort(key=lambda x: x[0])
-        top5 = scored[:5]
+        st.session_state['equiv_auto_results'] = {
+            'orig_id': _orig_id,
+            'macros': active_macro_names,
+            'threshold': threshold,
+            'items': scored[:5],
+        }
 
-        if top5:
-            st.success(t('found_equivalents', n=len(top5), pct=int(threshold * 100)))
-            for rank, (score, diffs, c) in enumerate(top5, 1):
-                with st.container(border=True):
-                    c_nutr = c.get('nutrition', {})
-                    c_srv_g, c_srv_label = parse_serving_grams(c)
-                    source_badge = " 🇲🇽 SMAE" if c.get('_source') == 'smae' else ""
-                    st.markdown(f"**#{rank}** {c.get('name','')} — {c.get('brand','')}{source_badge}")
+# Rendered outside the button branch so inner buttons survive reruns
+_auto = st.session_state.get('equiv_auto_results')
+if _auto and _auto.get('orig_id') == _orig_id:
+    top5 = _auto['items']
+    _pct = int(_auto['threshold'] * 100)
+    if top5:
+        st.success(t('found_equivalents', n=len(top5), pct=_pct))
+        for rank, (score, diffs, c) in enumerate(top5, 1):
+            with st.container(border=True):
+                c_nutr = c.get('nutrition', {})
+                c_srv_g, c_srv_label = parse_serving_grams(c)
+                source_badge = " 🇲🇽 SMAE" if c.get('_source') == 'smae' else ""
+                st.markdown(f"**#{rank}** {c.get('name','')} — {c.get('brand','')}{source_badge}")
 
-                    macro_parts = []
-                    for macro in active_macro_names:
-                        val = c_nutr.get(macro, 0)
-                        d = diffs.get(macro, 0)
-                        sign = '+' if d > 0 else ''
-                        unit = macro.split('(')[1].rstrip(')') if '(' in macro else ''
-                        label = _tn(macro).split(' (')[0]
-                        macro_parts.append(f"{label}: {val}{unit} ({sign}{d:.1f}%)")
-                    st.caption('  ·  '.join(macro_parts))
+                macro_parts = []
+                for macro in _auto['macros']:
+                    val = c_nutr.get(macro, 0)
+                    d = diffs.get(macro, 0)
+                    sign = '+' if d > 0 else ''
+                    label = tn(macro).split(' (')[0]
+                    macro_parts.append(f"{label}: {fmt_value(val)}{nutrient_unit(macro)} ({sign}{d:.1f}%)")
+                st.caption('  ·  '.join(macro_parts))
 
-                    c_kcal_100 = c_nutr.get('Energy (kcal)', 0)
-                    if orig_kcal and c_kcal_100:
-                        equiv_g = round(orig_kcal / c_kcal_100 * 100, 1)
-                        if c_srv_g and c_srv_g > 0:
-                            portions = equiv_g / c_srv_g
-                            st.caption(f"100g equiv → {equiv_g}g  ·  {t('equiv_servings', n=portions, srv=c_srv_label)}")
-                        else:
-                            st.caption(f"100g equiv → {equiv_g}g")
+                c_kcal_100 = c_nutr.get('Energy (kcal)', 0)
+                if orig_kcal and c_kcal_100:
+                    target_kcal = orig_kcal * orig_grams / 100
+                    equiv_g = round(target_kcal / c_kcal_100 * 100, 1)
+                    line = f"{orig_grams:g}g → {equiv_g}g"
+                    if c_srv_g and c_srv_g > 0:
+                        line += f"  ·  {t('equiv_servings', n=equiv_g / c_srv_g, srv=c_srv_label)}"
+                    st.caption(line)
 
-                    if st.button(t('use_this'), key=f'use_auto_{rank}'):
-                        st.session_state['equiv_alternatives'] = [c]
-                        st.rerun()
-        else:
-            st.warning(t('no_equivalents_found', pct=int(threshold * 100)))
+                if st.button(t('use_this'), key=f'use_auto_{rank}'):
+                    st.session_state['equiv_alternatives'] = [c]
+                    st.rerun()
     else:
-        st.warning(t('no_macro_data'))
+        st.warning(t('no_equivalents_found', pct=_pct))

@@ -3,28 +3,8 @@ OjasFuel — Portion Calculator page
 """
 
 import streamlit as st
-import sys
-sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
-
 from src.i18n import t, init_session
-
-# Maps OFF nutrient keys to i18n translation keys
-_NUTRIENT_KEYS = {
-    'Energy (kcal)':      'nutrient_energy_kcal',
-    'Energy (kJ)':        'nutrient_energy_kj',
-    'Protein (g)':        'nutrient_protein',
-    'Fat (g)':            'nutrient_fat',
-    'Saturated Fat (g)':  'nutrient_saturated_fat',
-    'Carbohydrates (g)':  'nutrient_carbohydrates',
-    'Sugars (g)':         'nutrient_sugars',
-    'Fiber (g)':          'nutrient_fiber',
-    'Sodium (mg)':        'nutrient_sodium',
-    'Salt (g)':           'nutrient_salt',
-}
-
-def _tn(nutrient_key: str) -> str:
-    """Translate a nutrient key or return it as-is if not mapped."""
-    return t(_NUTRIENT_KEYS[nutrient_key]) if nutrient_key in _NUTRIENT_KEYS else nutrient_key
+from src.ui_helpers import tn, tn_short, nutrient_unit, fmt_value, parse_serving_grams
 from src.theme import inject_theme
 
 st.set_page_config(page_title='OjasFuel — Portions', page_icon='⚖️', layout='wide')
@@ -32,7 +12,7 @@ init_session()
 inject_theme()
 
 if st.button(t('back')):
-    st.switch_page('pages/1_Detail.py')
+    st.switch_page(st.session_state.get('nav_from', 'pages/1_Detail.py'))
 
 st.title(f"⚖️ {t('portion_calc')}")
 
@@ -55,20 +35,24 @@ st.divider()
 st.subheader(t('how_much_eating'))
 
 input_method = st.radio(
-    'Input method',
+    t('how_much_eating'),
     options=[t('input_by_weight'), t('input_by_pct'), t('input_by_portions')],
     horizontal=True,
     label_visibility='collapsed',
 )
 
 portion_grams = None
+_srv_g, _srv_label = parse_serving_grams(product)
+_default_weight = float(min(max(_srv_g, 1.0), 5000.0)) if _srv_g else 100.0
+if _srv_g:
+    st.caption(f"{t('serving_size')}: {_srv_label}")
 
 if input_method == t('input_by_weight'):
     portion_grams = st.number_input(
         t('enter_weight_g'),
         min_value=1.0,
         max_value=5000.0,
-        value=100.0,
+        value=_default_weight,
         step=5.0,
     )
 
@@ -117,17 +101,12 @@ if portion_grams and portion_grams > 0 and nutrition:
     for col, key in zip(macro_cols, macro_shown):
         with col:
             val = computed[key]
-            unit = key.split('(')[1].rstrip(')')
-            label = key.split(' (')[0]
-            st.metric(label, f"{val} {unit}")
+            st.metric(tn_short(key), f"{fmt_value(val)} {nutrient_unit(key)}")
 
     # Warnings
     warnings = []
     if 'Sodium (mg)' in computed and computed['Sodium (mg)'] > 600:
         warnings.append(t('warning_sodium', v=f"{computed['Sodium (mg)']:.0f}"))
-    # OFF stores sodium in grams, convert
-    if 'Salt (g)' in computed and computed['Salt (g)'] * 1000 > 600:
-        warnings.append(t('warning_sodium', v=f"{computed['Salt (g)']*1000:.0f}"))
     if 'Sugars (g)' in computed and computed['Sugars (g)'] > 15:
         warnings.append(t('warning_sugar', v=f"{computed['Sugars (g)']:.1f}"))
     if 'Protein (g)' in computed and computed['Protein (g)'] < 5:
@@ -141,8 +120,8 @@ if portion_grams and portion_grams > 0 and nutrition:
     with st.expander(t('all_nutrients_expander')):
         for field, val in computed.items():
             c_name, c_val = st.columns([3, 1])
-            c_name.write(_tn(field))
-            c_val.write(f"**{val}**")
+            c_name.write(tn_short(field))
+            c_val.write(f"**{fmt_value(val)} {nutrient_unit(field)}**".strip())
 
     st.divider()
 

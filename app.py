@@ -3,15 +3,15 @@ OjasFuel — Home / Search page
 """
 
 import streamlit as st
-import sys
 import os as _os, tempfile as _tempfile
-sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 
 from src.i18n import t, init_session, get_lang
 from src.theme import inject_theme
-from src.api_client import search_by_name, search_by_barcode
+from src.api_client import search_by_name, search_by_barcode, OFFConnectionError
 from src import smae_client
-from src.classifier import ProductClassifier
+from src.filtering import classify_results, allergy_violations, resolve_diet
+from src.barcode import is_barcode, normalize_barcode, decode_image
+from src.ui_helpers import diet_source_label
 
 st.set_page_config(
     page_title='OjasFuel',
@@ -22,10 +22,10 @@ st.set_page_config(
 
 init_session()
 inject_theme()
-classifier = ProductClassifier()
 
 # ── Live barcode scanner component (ZXing) ────────────────────────────────────
-_SCANNER_COMPONENT_DIR = _os.path.join(_tempfile.gettempdir(), 'ojsfuel_barcode_scanner_home')
+_LANG = get_lang()
+_SCANNER_COMPONENT_DIR = _os.path.join(_tempfile.gettempdir(), f'ojsfuel_barcode_scanner_home_{_LANG}')
 _os.makedirs(_SCANNER_COMPONENT_DIR, exist_ok=True)
 
 _SCANNER_HTML_TEMPLATE = """
@@ -163,6 +163,19 @@ _SCANNER_HTML_TEMPLATE = """
   #status.success { color: #00e676; }
   #status.error   { color: #ff4d6d; }
 
+  #capture-btn {
+    margin-top: 12px;
+    background: #00e676;
+    color: #04210f;
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 26px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #capture-btn:disabled { opacity: 0.5; cursor: default; }
+
   #result {
     display: none;
     margin-top: 16px;
@@ -219,6 +232,8 @@ _SCANNER_HTML_TEMPLATE = """
   <div id="status">{js_init_camera}</div>
 </div>
 
+<button id="capture-btn" type="button">{js_capture}</button>
+
 <div id="result">
   <div id="result-label">{js_barcode_detected_label}</div>
   <div id="result-code"></div>
@@ -235,7 +250,7 @@ window.parent.postMessage({
 window.parent.postMessage({
   isStreamlitMessage: true,
   type: 'streamlit:setFrameHeight',
-  height: 420,
+  height: 480,
 }, '*');
 
 (async () => {
@@ -244,6 +259,7 @@ window.parent.postMessage({
   const dot      = document.getElementById('status-dot');
   const resultEl = document.getElementById('result');
   const code     = document.getElementById('result-code');
+  const captureBtn = document.getElementById('capture-btn');
 
   const hints = new Map();
   hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
@@ -274,9 +290,14 @@ window.parent.postMessage({
   try {
     setStatus('{js_scanning}', 'active');
 
-    const autoPhotoTimer = setTimeout(() => {
-      reader.reset();
+    let sent = false;
+    const sendPhoto = () => {
+      if (sent) return;
+      sent = true;
+      clearTimeout(autoPhotoTimer);
       const dataUrl = capturePhoto();
+      reader.reset();
+      captureBtn.disabled = true;
       setStatus('{js_analyzing_photo}', 'active');
       dot.style.animation = 'none';
       window.parent.postMessage({
@@ -285,13 +306,16 @@ window.parent.postMessage({
         value: 'PHOTO:' + dataUrl,
         dataType: 'json',
       }, '*');
-    }, 5000);
+    };
+    const autoPhotoTimer = setTimeout(sendPhoto, 10000);
+    captureBtn.addEventListener('click', sendPhoto);
 
     await reader.decodeFromConstraints(
       { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
       'video',
       (res, err) => {
-        if (res) {
+        if (res && !sent) {
+          sent = true;
           clearTimeout(autoPhotoTimer);
           const barcode = res.getText();
           setStatus('{js_detected}', 'success');
@@ -327,56 +351,36 @@ def _build_scanner_html() -> str:
     html = html.replace('{js_camera_error}', t('camera_error_js'))
     html = html.replace('{js_barcode_detected_label}', t('detected_barcode'))
     html = html.replace('{js_analyzing_photo}', t('js_analyzing_photo'))
+    html = html.replace('{js_capture}', t('capture_photo'))
     return html
 
-with open(_os.path.join(_SCANNER_COMPONENT_DIR, 'index.html'), 'w') as _f:
-    _f.write(_build_scanner_html())
+
+def _write_if_changed(path: str, content: str) -> None:
+    try:
+        with open(path, 'r') as f:
+            if f.read() == content:
+                return
+    except OSError:
+        pass
+    tmp = f'{path}.{_os.getpid()}.tmp'
+    with open(tmp, 'w') as f:
+        f.write(content)
+    _os.replace(tmp, path)  # atomic: no half-written file for other users
+
+
+_write_if_changed(_os.path.join(_SCANNER_COMPONENT_DIR, 'index.html'), _build_scanner_html())
 
 _barcode_scanner_component = st.components.v1.declare_component(
-    'barcode_scanner_home',
+    f'barcode_scanner_home_{_LANG}',
     path=_SCANNER_COMPONENT_DIR,
 )
 
 
-def _is_barcode(query: str) -> bool:
-    return query.strip().isdigit() and 8 <= len(query.strip()) <= 14
-
-
-def _try_decode_pyzbar(img_pil):
-    try:
-        import pyzbar.pyzbar as _pyzbar
-        import cv2 as _cv2
-        import numpy as _np
-        from PIL import Image as _PILImage
-    except ImportError:
-        return []
-    candidates = [img_pil]
-    try:
-        arr = _cv2.cvtColor(_np.array(img_pil), _cv2.COLOR_RGB2GRAY)
-        kernel = _np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-        sharp = _cv2.filter2D(arr, -1, kernel)
-        candidates.append(_PILImage.fromarray(sharp))
-    except Exception:
-        pass
-    for img in candidates:
-        result = _pyzbar.decode(img)
-        if result:
-            return result
-    return []
-
-
 def _diet_tags(product: dict) -> tuple[str, str]:
-    """Return (badge, css_class). Uses classifier result if available, else OFF tags."""
-    cl = product.get('_classification', {})
-    is_vegan = cl.get('is_vegan') if cl else None
-    is_vegetarian = cl.get('is_vegetarian') if cl else None
-
-    # Fall back to OFF's own analysis tags when classifier has no ingredients
-    if is_vegan is None and is_vegetarian is None:
-        off = product.get('_off_tags', {})
-        is_vegan = off.get('is_vegan')
-        is_vegetarian = off.get('is_vegetarian')
-
+    """Return (badge, css_class) from the shared resolve_diet result."""
+    d = product.get('_diet') or {}
+    is_vegan = d.get('is_vegan')
+    is_vegetarian = d.get('is_vegetarian')
     if is_vegan:
         return t('vegan_tag'), 'tag-vegan'
     if is_vegetarian:
@@ -398,52 +402,6 @@ def _filter_tag(product: dict) -> str:
     return ''
 
 
-def _classify_results(products: list) -> list:
-    """
-    Classify products and filter out those that fail the active diet mode.
-    Priority: OFF's own analysis tags > our regex classifier.
-    OFF tags are human-verified; classifier runs only when OFF has no data.
-    """
-    settings = st.session_state['settings']
-    mode = settings.get('mode', 'vegetarian')
-    filtered = []
-
-    for p in products:
-        off = p.get('_off_tags', {})
-        off_veg = off.get('is_vegetarian')   # True / False / None
-        off_vegan = off.get('is_vegan')       # True / False / None
-
-        p['_classification'] = classifier.classify(p.get('ingredients', ''), settings, product_name=p.get('name', ''))
-        cl = p['_classification']
-
-        # Country post-filter: client-side check on countries_tags
-        # (secondary guard — server-side already scoped by cc subdomain when available)
-        cs = settings.get('countries', {})
-        country_tags = cs.get('tags', []) if isinstance(cs, dict) else cs  # compat
-        if country_tags:
-            prod_countries = p.get('countries_tags', [])
-            if prod_countries and not any(c in prod_countries for c in country_tags):
-                continue
-            # no countries_tags on product → pass through (incomplete metadata)
-
-        # Always hide meat/fish/gelatin — regardless of mode
-        is_veg = off_veg if off_veg is not None else cl.get('is_vegetarian')
-        if is_veg is False:
-            continue
-
-        if mode == 'both':
-            filtered.append(p)
-            continue
-
-        # Vegan mode: also hide dairy/eggs/honey
-        is_vegan = off_vegan if off_vegan is not None else cl.get('is_vegan')
-        if mode == 'vegan' and is_vegan is False:
-            continue
-
-        filtered.append(p)
-    return filtered
-
-
 # ── Header ──────────────────────────────────────────────────────────────────
 _, col_logo, _ = st.columns([2, 1, 2])
 with col_logo:
@@ -452,23 +410,22 @@ with col_logo:
 
 st.divider()
 
-# Beta banner
 settings = st.session_state['settings']
 active_filters = [k for k in ('no_garlic','no_onion','no_caffeine','no_alcohol',
                                'no_mushrooms','no_gelatin','jain','lacto','ovo',
                                'ovo_lacto','strict_egg_traces') if settings.get(k)]
 mode = settings.get('mode', 'vegetarian')
 
-diet_label = f"{t('diet_mode')}: <strong>{t(mode)}</strong>"
+diet_label = f"{t('diet_mode')}: **{t(mode)}**"
 if active_filters:
-    diet_label += f" &nbsp;|&nbsp; {t('restrictions_active', n=len(active_filters))}"
+    diet_label += f"  |  {t('restrictions_active', n=len(active_filters))}"
 
 # Diet mode compact banner + Settings
-col1, col2 = st.columns([1, 0.08], gap='small')
+col1, col2 = st.columns([1, 0.2], gap='small')
 with col1:
-    st.markdown(f"**Base Diet Mode:** {t(mode)}")
+    st.markdown(diet_label)
 with col2:
-    if st.button('⚙️', key='settings_btn', help=t('go_to_settings'), use_container_width=False):
+    if st.button(f"⚙️ {t('settings')}", key='settings_btn', help=t('go_to_settings'), width='stretch'):
         st.switch_page('pages/5_Settings.py')
 
 st.divider()
@@ -481,21 +438,27 @@ if _scanned:
 
 col_search, col_scan = st.columns([5, 1])
 with col_search:
-    query = st.text_input(
-        label=t('search'),
-        placeholder=t('search_placeholder'),
-        label_visibility='collapsed',
-        key='search_query',
-    )
+    with st.form('search_form', border=False):
+        query = st.text_input(
+            label=t('search'),
+            placeholder=t('search_placeholder'),
+            label_visibility='collapsed',
+            key='search_query',
+        )
+        search_clicked = st.form_submit_button(t('search_button'), type='primary')
 with col_scan:
-    scan_clicked = st.button(t('scan_barcode'), use_container_width=True)
+    scan_clicked = st.button(t('scan_barcode'), width='stretch')
 
 if scan_clicked:
-    st.session_state['show_scanner'] = not st.session_state.get('show_scanner', False)
+    _opening = not st.session_state.get('show_scanner', False)
+    st.session_state['show_scanner'] = _opening
+    if _opening:
+        # New component key each time so the old value is never replayed
+        st.session_state['scanner_key'] = st.session_state.get('scanner_key', 0) + 1
 
 if st.session_state.get('show_scanner'):
     _scanner_key = st.session_state.get('scanner_key', 0)
-    _live_result = _barcode_scanner_component(key=f'home_live_barcode_{_scanner_key}', default=None, height=420)
+    _live_result = _barcode_scanner_component(key=f'home_live_barcode_{_scanner_key}', default=None, height=480)
     if _live_result:
         _result_str = str(_live_result)
         if _result_str.startswith('PHOTO:'):
@@ -505,19 +468,30 @@ if st.session_state.get('show_scanner'):
             _b64_data = _re.sub(r'^data:image/\w+;base64,', '', _data_url)
             _img_bytes = _b64.b64decode(_b64_data)
             _pil_img = _PILImg.open(_io.BytesIO(_img_bytes)).convert('RGB')
-            _barcodes = _try_decode_pyzbar(_pil_img)
-            if _barcodes:
-                st.session_state['show_scanner'] = False
-                st.session_state['scanned_barcode'] = _barcodes[0].data.decode('utf-8')
-                st.rerun()
+            _decoded = decode_image(_pil_img)
+            st.session_state['show_scanner'] = False
+            if _decoded and is_barcode(_decoded):
+                st.session_state['scanned_barcode'] = _decoded
+            elif _decoded:
+                st.session_state['scan_invalid_code'] = _decoded
             else:
-                st.session_state['show_scanner'] = False
                 st.session_state['photo_retry'] = True
-                st.rerun()
-        elif _is_barcode(_result_str):
+            st.rerun()
+        elif is_barcode(_result_str):
             st.session_state['show_scanner'] = False
             st.session_state['scanned_barcode'] = _result_str
             st.rerun()
+        else:
+            # Non-numeric symbology (CODE_128 / CODE_39): tell the user instead of hanging
+            st.session_state['show_scanner'] = False
+            st.session_state['scan_invalid_code'] = _result_str
+            st.rerun()
+
+st.caption('⌨️ ' + t('manual_barcode_hint'))
+
+_invalid_code = st.session_state.pop('scan_invalid_code', None)
+if _invalid_code:
+    st.warning(t('barcode_non_numeric', code=_invalid_code))
 
 if st.session_state.pop('photo_retry', False):
     st.warning(t('barcode_not_detected'))
@@ -526,35 +500,50 @@ if st.session_state.pop('photo_retry', False):
         st.session_state['scanner_key'] = st.session_state.get('scanner_key', 0) + 1
         st.rerun()
 
-search_clicked = st.button(t('search_button'), type='primary', use_container_width=False)
+# Decide whether to run a search this run
+run_query = None
+if search_clicked and query.strip():
+    run_query = query.strip()
+elif _scanned and query.strip():
+    run_query = query.strip()
+else:
+    _retry = st.session_state.pop('retry_query', None)
+    if _retry:
+        run_query = _retry
 
-# Auto-search when barcode was just scanned (no button press needed)
-auto_search = bool(_scanned)
 
-if (search_clicked and query.strip()) or (auto_search and query.strip()):
+def _retry_search(code: str):
+    st.session_state['retry_query'] = code
+
+
+if run_query:
+    st.session_state.pop('conn_error_code', None)
+    products = []
+    conn_error = False
     with st.spinner(t('searching')):
         try:
             cs = settings.get('countries', {})
             cc = cs.get('cc') if isinstance(cs, dict) else None
             is_mexico = cc == 'mx'
 
-            if _is_barcode(query.strip()):
-                # For Mexico: try OFF first (some products may have barcodes), then show hint
-                product = search_by_barcode(query.strip())
-                if product:
-                    products = [product]
-                else:
-                    products = []
+            if is_barcode(run_query):
+                try:
+                    product = search_by_barcode(normalize_barcode(run_query))
+                except OFFConnectionError:
+                    product = None
+                    conn_error = True
+                    st.session_state['conn_error_code'] = run_query
+                products = [product] if product else []
+                if not product and not conn_error:
                     if is_mexico:
                         st.warning(t('smae_no_barcode'))
                     else:
-                        st.warning(t('barcode_not_found_off', code=query.strip()))
-                    st.session_state['contribute_prefill_barcode'] = query.strip()
+                        st.warning(t('barcode_not_found_off', code=run_query))
             elif is_mexico:
                 # Hybrid: SMAE first, then OFF Mexico
-                smae_results = smae_client.search_by_name(query.strip(), page_size=20)
+                smae_results = smae_client.search_by_name(run_query, page_size=20)
                 try:
-                    off_results = search_by_name(query.strip(), page_size=10, country_code='mx')
+                    off_results = search_by_name(run_query, page_size=10, country_code='mx')
                 except Exception:
                     off_results = []
                 seen_names = {r['name'].lower() for r in smae_results}
@@ -562,27 +551,42 @@ if (search_clicked and query.strip()) or (auto_search and query.strip()):
                     p for p in off_results if p['name'].lower() not in seen_names
                 ]
             else:
-                products = search_by_name(query.strip(), page_size=20, country_code=cc)
+                products = search_by_name(run_query, page_size=20, country_code=cc)
         except Exception as e:
             st.error(f"{t('error')}: {e}")
             products = []
 
-    if products:
-        products = _classify_results(products)
-        st.session_state['search_results'] = products
-        st.success(t('results_count', n=len(products)))
-    elif query.strip() and not _is_barcode(query.strip()):
-        st.session_state['search_results'] = []
-        st.session_state['contribute_prefill_name'] = query.strip()
-        st.warning(t('no_results'))
+    if products and is_barcode(run_query):
+        # Exact barcode lookup: never hide the product, just label it
+        for _p in products:
+            _p['_diet'] = resolve_diet(_p, settings)
+            _p['_classification'] = _p['_diet']['classification']
+    elif products:
+        products = classify_results(products, settings)
 
-# ── Contribute prompt (shown only after a failed search) ─────────────────────
-_no_results_after_search = (
-    (search_clicked or auto_search)
-    and query.strip()
-    and not st.session_state.get('search_results')
-)
-if _no_results_after_search or st.session_state.get('contribute_prefill_barcode'):
+    if products:
+        st.session_state['search_results'] = products
+        st.session_state['last_search_empty'] = False
+    else:
+        st.session_state['search_results'] = []
+        if conn_error:
+            st.session_state['last_search_empty'] = False
+        else:
+            st.session_state['last_search_empty'] = True
+            if is_barcode(run_query):
+                st.session_state['contribute_prefill_barcode'] = normalize_barcode(run_query)
+            else:
+                st.session_state['contribute_prefill_name'] = run_query
+                st.warning(t('no_results'))
+
+# ── Connection error (not the same as "not found") ───────────────────────────
+_conn_code = st.session_state.get('conn_error_code')
+if _conn_code:
+    st.error(t('connection_error'))
+    st.button(t('retry_search'), key='retry_search_btn', on_click=_retry_search, args=(_conn_code,))
+
+# ── Contribute prompt (shown only after a genuinely empty search) ────────────
+if st.session_state.get('last_search_empty'):
     st.divider()
     st.caption('🔍 ' + t('not_found_prompt'))
     st.page_link('pages/6_Contribute.py', label=t('contribute_button'), icon='➕')
@@ -595,12 +599,22 @@ if results:
 
     for idx, product in enumerate(results):
         with st.container(border=True):
-            c1, c2, c3 = st.columns([3, 2, 1])
+            c0, c1, c2, c3 = st.columns([0.6, 3, 2, 1])
+
+            with c0:
+                if product.get('image_url'):
+                    st.image(product['image_url'], width=64)
 
             with c1:
                 name = product.get('name') or 'Unknown'
                 brand = product.get('brand') or ''
                 source = product.get('_source', '')
+
+                cl = product.get('_classification', {}) or {}
+                allergy_hits = allergy_violations(cl) if cl else []
+                if allergy_hits:
+                    st.error('🚨 ' + t('allergy_warning', items=', '.join(allergy_hits[:3])))
+
                 st.markdown(f"**{name}**")
                 if source == 'smae':
                     st.caption(f"🇲🇽 {t('smae_source_label')}")
@@ -615,14 +629,14 @@ if results:
                         st.caption(f"_{preview}_")
                     else:
                         st.caption(f"_{t('no_ingredients')}_")
+                        st.caption('⚠️ ' + t('check_allergies_detail'))
 
             with c2:
                 diet_tag, _ = _diet_tags(product)
                 st.markdown(diet_tag)
 
-                cl = product.get('_classification', {})
-                if cl.get('confidence'):
-                    st.caption(f"{t('confidence')}: {cl['confidence']*100:.0f}%")
+                _src = (product.get('_diet') or {}).get('source', 'none')
+                st.caption(diet_source_label(_src))
 
                 filter_tag = _filter_tag(product)
                 if filter_tag:
@@ -632,12 +646,13 @@ if results:
                 nutri = product.get('nutriscore', '')
                 if qty:
                     st.caption(f"📦 {qty}")
-                if nutri:
+                if nutri and nutri in ('A', 'B', 'C', 'D', 'E'):
                     st.caption(f"{t('nutriscore')}: **{nutri}**")
 
             with c3:
-                if st.button(t('view_detail'), key=f'detail_{idx}', use_container_width=True):
+                if st.button(t('view_detail'), key=f'detail_{idx}', width='stretch'):
                     st.session_state['selected_product'] = product
                     st.session_state['portion_product'] = product
                     st.session_state['equiv_original'] = product
+                    st.session_state['nav_from'] = 'pages/1_Detail.py'
                     st.switch_page('pages/1_Detail.py')
