@@ -5,6 +5,7 @@ OjasFuel — Settings page (auto-saving)
 import copy
 import streamlit as st
 
+from src.countries import COUNTRIES, country_name, country_cid, apply_country, ordered_ids
 from src.i18n import _valid_setting, get_lang, t, init_session, DEFAULT_SETTINGS, apply_veg_variant
 from src.theme import inject_theme
 
@@ -12,33 +13,7 @@ st.set_page_config(page_title='OjasFuel — Settings', page_icon='⚙️', layou
 init_session()
 inject_theme()
 
-# Each id → {tags, cc}. cc = OFF country code (country subdomain, better coverage);
-# tags = client-side post-filter on countries_tags.
-COUNTRIES = {
-    'all': {'tags': [], 'cc': None},
-    'mx': {'tags': ['en:mexico'], 'cc': 'mx'},
-    'us': {'tags': ['en:united-states'], 'cc': 'us'},
-    'gb': {'tags': ['en:united-kingdom'], 'cc': 'gb'},
-    'es': {'tags': ['en:spain'], 'cc': 'es'},
-    'fr': {'tags': ['en:france'], 'cc': 'fr'},
-    'de': {'tags': ['en:germany'], 'cc': 'de'},
-    'it': {'tags': ['en:italy'], 'cc': 'it'},
-    'nl': {'tags': ['en:netherlands'], 'cc': 'nl'},
-    'be': {'tags': ['en:belgium'], 'cc': 'be'},
-    'ch': {'tags': ['en:switzerland'], 'cc': 'ch'},
-    'pt': {'tags': ['en:portugal'], 'cc': 'pt'},
-    'pl': {'tags': ['en:poland'], 'cc': 'pl'},
-    'europe': {'tags': [
-        'en:united-kingdom', 'en:france', 'en:germany', 'en:italy', 'en:spain',
-        'en:netherlands', 'en:belgium', 'en:switzerland', 'en:portugal', 'en:poland',
-        'en:austria', 'en:sweden', 'en:denmark', 'en:norway', 'en:finland',
-    ], 'cc': None},
-}
 THRESHOLDS = [5, 10, 15, 20, 25, 30]
-
-
-def _country_name(cid: str) -> str:
-    return t('country_all_opt') if cid == 'all' else t(f'country_{cid}')
 
 
 def _wk(name: str) -> str:
@@ -59,6 +34,8 @@ def _changed(key: str, widget_key: str, transform=lambda v: v) -> None:
     if not _valid_setting(key, value):
         return  # never persist a stray label
     s[key] = value
+    if key == 'countries':
+        apply_country(s, country_cid(value))  # also remembers it as a recent country
     if key == 'veg_variant':
         apply_veg_variant(s)
     if key == 'theme':
@@ -73,15 +50,6 @@ def _reset() -> None:
         del st.session_state[k]
     st.session_state['_pending_ls_clear'] = True
     st.toast(t('settings_reset_done'))
-
-
-def _country_cid(setting) -> str:
-    if isinstance(setting, list):  # backward compat: old format was a plain list
-        setting = {'tags': setting, 'cc': None}
-    for cid, v in COUNTRIES.items():
-        if v['cc'] == setting.get('cc') and sorted(v['tags']) == sorted(setting.get('tags', [])):
-            return cid
-    return 'all'
 
 
 s = st.session_state['settings']
@@ -110,12 +78,12 @@ st.divider()
 
 # ── Country filter ────────────────────────────────────────────────────────────
 st.subheader(t('country_filter'))
-_ids = list(COUNTRIES.keys())
+_ids = ordered_ids(s.get('recent_countries'))
 st.selectbox(
     t('country_filter'),
     options=_ids,
-    format_func=_country_name,
-    index=_ids.index(_country_cid(s.get('countries', {'tags': [], 'cc': None}))),
+    format_func=country_name,
+    index=_ids.index(country_cid(s.get('countries', {'tags': [], 'cc': None}))),
     help=t('country_filter_help'),
     label_visibility='collapsed',
     key=_wk('country'),
@@ -123,7 +91,7 @@ st.selectbox(
 )
 chosen = s.get('countries') or {'tags': [], 'cc': None}
 if chosen.get('cc'):
-    st.caption(t('country_search_msg', country=_country_name(_country_cid(chosen)).split(' ', 1)[-1]))
+    st.caption(t('country_search_msg', country=country_name(country_cid(chosen)).split(' ', 1)[-1]))
 elif chosen.get('tags'):
     st.caption(t('client_filter_only'))
 else:

@@ -1,6 +1,7 @@
 [client]
 showErrorDetails = false
 toolbarMode = "minimal"
+showSidebarNavigation = false
 
 [logger]
 level = "error"

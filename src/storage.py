@@ -16,6 +16,26 @@ except ImportError:
 _LS_KEY = 'smaeuk_settings_v1'
 
 
+# Streamlit turns a component value of null into the default (0), which we use
+# to mean "JS not evaluated yet". So an empty key must return a distinct marker,
+# otherwise first-time users wait forever (no onboarding, history never saved).
+_EMPTY = '__ojasfuel_empty__'
+
+
+def _read_js(ls_key: str) -> str:
+    return (f"(() => {{ const v = localStorage.getItem('{ls_key}'); "
+            f"return v === null ? '{_EMPTY}' : JSON.parse(v); }})()")
+
+
+def _interpret(raw):
+    """Map an st_javascript result to (ready, data)."""
+    if raw is None or (isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw == 0):
+        return False, None
+    if raw == _EMPTY:
+        return True, None
+    return True, raw
+
+
 def read_localstorage() -> tuple[bool, dict | None]:
     """
     Read settings from localStorage.
@@ -26,12 +46,11 @@ def read_localstorage() -> tuple[bool, dict | None]:
     if not _JS_OK:
         return True, None
     try:
-        raw = st_javascript(f"JSON.parse(localStorage.getItem('{_LS_KEY}') || 'null')")
+        raw = st_javascript(_read_js(_LS_KEY))
     except Exception:
         return True, None
-    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw == 0:
-        return False, None
-    return True, (raw if isinstance(raw, dict) else None)
+    ready, data = _interpret(raw)
+    return ready, (data if isinstance(data, dict) else None)
 
 
 def load_from_localstorage() -> dict | None:
@@ -58,5 +77,29 @@ def clear_localstorage() -> None:
         return
     try:
         st_javascript(f"localStorage.removeItem('{_LS_KEY}'); 1")
+    except Exception:
+        pass
+
+
+# ── Generic keyed storage (history etc.) ─────────────────────────────────────
+def read_key(ls_key: str):
+    """Read a JSON value stored under ls_key. Returns (ready, data)."""
+    if not _JS_OK:
+        return True, None
+    try:
+        raw = st_javascript(_read_js(ls_key))
+    except Exception:
+        return True, None
+    return _interpret(raw)
+
+
+def write_key(ls_key: str, data) -> None:
+    """Write a JSON-serialisable value to localStorage under ls_key."""
+    if not _JS_OK:
+        return
+    try:
+        payload = json.dumps(data, ensure_ascii=False)
+        payload = payload.replace('\\', '\\\\').replace('`', r'\`').replace('${', '\\${').replace('</', '<\\/')
+        st_javascript(f"localStorage.setItem('{ls_key}', `{payload}`); 1")
     except Exception:
         pass

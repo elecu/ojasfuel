@@ -413,6 +413,56 @@ _EN = {
     'nutrient_vitamin_e': 'Vitamin E (mg)',
     'nutrient_vitamin_k': 'Vitamin K (µg)',
     'nutrient_caffeine': 'Caffeine (mg)',
+    'verdict_ok': 'Suitable for you',
+    'verdict_no': 'Not suitable',
+    'verdict_unknown': 'Unclear — check the label',
+    'verdict_no_ingredients': 'No ingredient list available',
+    'verdict_maybe_vegan': 'May not be vegan (uncertain ingredients)',
+    'verdict_no_diet_data': 'Not enough data to classify this product',
+    'alternatives_title': 'Suitable alternatives',
+    'finding_alternatives': 'Finding suitable alternatives...',
+    'no_alternatives': 'No suitable alternatives found right now.',
+    'open_verdict': 'Open',
+    'scan_big': '📸 Scan',
+    'close_scanner': 'Close scanner',
+    'path_scan_hint': 'Packaged product with a barcode',
+    'path_search_hint': 'Search by name: fruit, vegetables, bulk, any food',
+    'quick_search': 'Quick search',
+    'recent': 'Recent',
+    'my_lists': 'My lists',
+    'my_safe': '⭐ My safe products',
+    'my_avoid': '🚫 To avoid',
+    'off_unavailable': 'Open Food Facts is not responding; showing local results only.',
+    'quick_questions': 'Quick questions',
+    'qq_why': 'Why?',
+    'qq_portion': 'How much can I eat?',
+    'qq_similar': 'Similar suitable products?',
+    'qq_calories': 'Calories per serving',
+    'qq_smae': 'SMAE equivalent',
+    'why_no_issues': 'No issues found for your settings.',
+    'calories_per_serving': 'Calories per serving ({serving})',
+    'no_serving_info': 'No serving size available for this product.',
+    'smae_closest': 'Closest SMAE match: {name}',
+    'smae_not_found': 'No SMAE equivalent found.',
+    'product_details': 'Product details',
+    'save_safe': 'Save as safe',
+    'saved_safe': 'Saved as safe',
+    'avoid': 'Avoid',
+    'avoiding': 'Avoiding',
+    'scan_another': 'Scan another',
+    'report_error': 'Report error',
+    'seen_on': 'Seen on {date}',
+    'refresh': '🔄 Refresh',
+    'go_home': '🏠 Home',
+    'onb_title': 'Quick setup',
+    'onb_step': 'Step {n} of {total}',
+    'onb_next': 'Next',
+    'onb_done': 'Done',
+    'onb_skip': 'Skip',
+    'onb_allergies_none': 'No allergies',
+    'change_country': 'Shopping in',
+    'country_changed': 'Now showing products from {country}',
+    'country_switch_help': 'Travelling? Change the country here; recent ones stay at the top.',
 }
 
 _ES = {
@@ -822,6 +872,56 @@ _ES = {
     'nutrient_vitamin_e': 'Vitamina E (mg)',
     'nutrient_vitamin_k': 'Vitamina K (µg)',
     'nutrient_caffeine': 'Cafeína (mg)',
+    'verdict_ok': 'Apto para ti',
+    'verdict_no': 'No apto',
+    'verdict_unknown': 'Poco claro — revisa la etiqueta',
+    'verdict_no_ingredients': 'No hay lista de ingredientes disponible',
+    'verdict_maybe_vegan': 'Puede no ser vegano (ingredientes inciertos)',
+    'verdict_no_diet_data': 'No hay datos suficientes para clasificar este producto',
+    'alternatives_title': 'Alternativas aptas',
+    'finding_alternatives': 'Buscando alternativas aptas...',
+    'no_alternatives': 'No se encontraron alternativas aptas por ahora.',
+    'open_verdict': 'Abrir',
+    'scan_big': '📸 Escanear',
+    'close_scanner': 'Cerrar escáner',
+    'path_scan_hint': 'Producto envasado con código de barras',
+    'path_search_hint': 'Buscar por nombre: fruta, verdura, granel, cualquier alimento',
+    'quick_search': 'Búsqueda rápida',
+    'recent': 'Recientes',
+    'my_lists': 'Mis listas',
+    'my_safe': '⭐ Mis productos seguros',
+    'my_avoid': '🚫 A evitar',
+    'off_unavailable': 'Open Food Facts no responde; mostrando solo resultados locales.',
+    'quick_questions': 'Preguntas rápidas',
+    'qq_why': '¿Por qué?',
+    'qq_portion': '¿Cuánto puedo comer?',
+    'qq_similar': '¿Productos similares aptos?',
+    'qq_calories': 'Calorías por porción',
+    'qq_smae': 'Equivalente SMAE',
+    'why_no_issues': 'No se encontraron problemas con tu configuración.',
+    'calories_per_serving': 'Calorías por porción ({serving})',
+    'no_serving_info': 'No hay tamaño de porción disponible para este producto.',
+    'smae_closest': 'Coincidencia SMAE más cercana: {name}',
+    'smae_not_found': 'No se encontró equivalente SMAE.',
+    'product_details': 'Detalles del producto',
+    'save_safe': 'Guardar como seguro',
+    'saved_safe': 'Guardado como seguro',
+    'avoid': 'Evitar',
+    'avoiding': 'Evitando',
+    'scan_another': 'Escanear otro',
+    'report_error': 'Reportar error',
+    'seen_on': 'Visto el {date}',
+    'refresh': '🔄 Actualizar',
+    'go_home': '🏠 Inicio',
+    'onb_title': 'Configuración rápida',
+    'onb_step': 'Paso {n} de {total}',
+    'onb_next': 'Siguiente',
+    'onb_done': 'Listo',
+    'onb_skip': 'Omitir',
+    'onb_allergies_none': 'Sin alergias',
+    'change_country': 'Comprando en',
+    'country_changed': 'Ahora se muestran productos de {country}',
+    'country_switch_help': '¿Viajas? Cambia el país aquí; los recientes quedan arriba.',
 }
 
 _TRANSLATIONS = {'en': _EN, 'es': _ES}
@@ -850,6 +950,8 @@ DEFAULT_SETTINGS = {
     'theme': 'dark',
     'lang': 'en',
     'countries': {'tags': [], 'cc': None},  # empty = all countries
+    'onboarded': False,  # first-visit onboarding completed/skipped
+    'recent_countries': [],  # traveller quick switcher: most recent first
 }
 
 
@@ -924,6 +1026,8 @@ def _valid_setting(key: str, value) -> bool:
         return isinstance(value, (int, float)) and 0 < value < 1
     if key == 'countries':
         return isinstance(value, (dict, list))
+    if key == 'recent_countries':
+        return isinstance(value, list) and all(isinstance(c, str) for c in value)
     return True
 
 
@@ -952,6 +1056,8 @@ def init_session() -> None:
             if ready:
                 if saved:
                     _merge_saved(saved)
+                    if 'onboarded' not in saved:
+                        s['onboarded'] = True  # existing user: never show onboarding
                 st.session_state['_ls_loaded'] = True
     except Exception:
         st.session_state['_ls_loaded'] = True

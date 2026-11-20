@@ -7,11 +7,14 @@ import os as _os, tempfile as _tempfile
 
 from src.i18n import t, init_session, get_lang
 from src.theme import inject_theme
-from src.api_client import search_by_name, search_by_barcode, OFFConnectionError
-from src import smae_client
-from src.filtering import classify_results, allergy_violations, resolve_diet
+from src.api_client import OFFConnectionError
 from src.barcode import is_barcode, normalize_barcode, decode_image
-from src.ui_helpers import diet_source_label
+from src.ui_helpers import (inject_verdict_css, compute_verdict, open_verdict,
+                            lookup_barcode, verdict_row, STATUS_EMOJI)
+from src import history
+from src.search_smart import smart_search, single_clear_match, common_foods
+from src.smae_client import _normalize
+from src.countries import COUNTRIES, apply_country, country_cid, country_name, ordered_ids
 
 st.set_page_config(
     page_title='OjasFuel',
@@ -22,6 +25,8 @@ st.set_page_config(
 
 init_session()
 inject_theme()
+inject_verdict_css()
+history.load_history()
 
 # ── Live barcode scanner component (ZXing) ────────────────────────────────────
 _LANG = get_lang()
@@ -376,30 +381,117 @@ _barcode_scanner_component = st.components.v1.declare_component(
 )
 
 
-def _diet_tags(product: dict) -> tuple[str, str]:
-    """Return (badge, css_class) from the shared resolve_diet result."""
-    d = product.get('_diet') or {}
-    is_vegan = d.get('is_vegan')
-    is_vegetarian = d.get('is_vegetarian')
-    if is_vegan:
-        return t('vegan_tag'), 'tag-vegan'
-    if is_vegetarian:
-        return t('vegetarian_tag'), 'tag-veg'
-    if is_vegan is None and is_vegetarian is None:
-        return t('unknown_tag'), 'tag-unknown'
-    return t('not_vegetarian_tag'), 'tag-no'
+_ONB_COUNTRIES = COUNTRIES
+_ALLERGY_KEYS = ['allergies_nuts', 'allergies_peanuts', 'allergies_soy',
+                 'allergies_mustard', 'allergies_sesame', 'allergies_gluten']
+
+st.markdown("""
+<style>
+.st-key-scan_btn button { min-height: 4.4rem; font-size: 1.35rem; font-weight: 800; }
+.st-key-search_form button { min-height: 2.6rem; }
+</style>
+""", unsafe_allow_html=True)
 
 
-def _filter_tag(product: dict) -> str:
-    cl = product.get('_classification', {})
-    if not cl:
-        return ''
-    if cl.get('passes_filters'):
-        return t('passes_filter')
-    violations = cl.get('violations', [])
-    if violations:
-        return t('fails_filter') + '\n• ' + '\n• '.join(violations[:3])
-    return ''
+def _wk(name: str) -> str:
+    """Per-language widget key so radios/selects rebuild when the language changes."""
+    return f'onb_{name}_{get_lang()}'
+
+
+def _onb_save() -> None:
+    st.session_state['_ls_dirty'] = True
+
+
+def _onb_lang() -> None:
+    v = st.session_state[_wk('lang')]
+    if v in ('en', 'es'):
+        st.session_state['settings']['lang'] = v
+        _onb_save()
+
+
+def _onb_country() -> None:
+    cid = st.session_state[_wk('country')]
+    if cid in _ONB_COUNTRIES:
+        apply_country(st.session_state['settings'], cid)
+        _onb_save()
+
+
+def _onb_mode() -> None:
+    v = st.session_state[_wk('mode')]
+    if v in ('vegetarian', 'vegan', 'both'):
+        st.session_state['settings']['mode'] = v
+        _onb_save()
+
+
+def _onb_allergies() -> None:
+    chosen = set(st.session_state[_wk('allergies')])
+    for k in _ALLERGY_KEYS:
+        st.session_state['settings'][k] = k in chosen
+    _onb_save()
+
+
+def _onb_finish() -> None:
+    st.session_state['settings']['onboarded'] = True
+    st.session_state.pop('onb_step', None)
+    _onb_save()
+
+
+def _onb_next() -> None:
+    st.session_state['onb_step'] = st.session_state.get('onb_step', 0) + 1
+
+
+def _onb_prev() -> None:
+    st.session_state['onb_step'] = max(0, st.session_state.get('onb_step', 0) - 1)
+
+
+def _render_onboarding(s: dict) -> None:
+    step = st.session_state.get('onb_step', 0)
+    if step > 3:
+        _onb_finish()
+        step = 0
+    with st.container(border=True):
+        st.subheader(t('onb_title'))
+        st.progress((step + 1) / 4, text=t('onb_step', n=step + 1, total=4))
+        if step == 0:
+            st.markdown(f"**{t('language')}**")
+            st.radio(t('language'), options=['en', 'es'],
+                     format_func=lambda v: {'en': 'English (UK)', 'es': 'Español'}[v],
+                     index=0 if s.get('lang', 'en') == 'en' else 1, horizontal=True,
+                     label_visibility='collapsed', key=_wk('lang'), on_change=_onb_lang)
+        elif step == 1:
+            st.markdown(f"**{t('country_filter')}**")
+            ids = list(_ONB_COUNTRIES)
+            cur = s.get('countries', {})
+            cur_cc = cur.get('cc') if isinstance(cur, dict) else None
+            idx = next((i for i, c in enumerate(ids) if _ONB_COUNTRIES[c]['cc'] == cur_cc), 0)
+            st.selectbox(t('country_filter'), options=ids,
+                         format_func=lambda c: t('country_all_opt') if c == 'all' else t(f'country_{c}'),
+                         index=idx, label_visibility='collapsed',
+                         key=_wk('country'), on_change=_onb_country)
+        elif step == 2:
+            st.markdown(f"**{t('diet_mode')}**")
+            modes = ['vegetarian', 'vegan', 'both']
+            st.radio(t('diet_mode'), options=modes, format_func=lambda m: t(m),
+                     index=modes.index(s.get('mode', 'vegetarian')) if s.get('mode') in modes else 0,
+                     horizontal=True, label_visibility='collapsed',
+                     key=_wk('mode'), on_change=_onb_mode)
+        else:
+            st.markdown(f"**{t('allergies')}**")
+            st.multiselect(t('allergies'), options=_ALLERGY_KEYS, format_func=lambda k: t(k),
+                           default=[k for k in _ALLERGY_KEYS if s.get(k)],
+                           placeholder=t('onb_allergies_none'), label_visibility='collapsed',
+                           key=_wk('allergies'), on_change=_onb_allergies)
+        c_back, c_next, c_skip = st.columns([1, 1, 1])
+        with c_back:
+            if step > 0:
+                st.button(t('back'), key='onb_back', on_click=_onb_prev, width='stretch')
+        with c_next:
+            if step < 3:
+                st.button(t('onb_next'), key='onb_next', type='primary', on_click=_onb_next, width='stretch')
+            else:
+                st.button(t('onb_done'), key='onb_done', type='primary', on_click=_onb_finish, width='stretch')
+        with c_skip:
+            st.button(t('onb_skip'), key='onb_skip', on_click=_onb_finish, width='stretch')
 
 
 # ── Header ──────────────────────────────────────────────────────────────────
@@ -408,9 +500,13 @@ with col_logo:
     st.image('logo_text2.png', width="stretch")
     st.caption(t('app_subtitle'))
 
-st.divider()
-
 settings = st.session_state['settings']
+
+# First visit: quick onboarding (only once localStorage has been read)
+if st.session_state.get('_ls_loaded') and not settings.get('onboarded'):
+    _render_onboarding(settings)
+    st.stop()
+
 active_filters = [k for k in ('no_garlic','no_onion','no_caffeine','no_alcohol',
                                'no_mushrooms','no_gelatin','jain','lacto','ovo',
                                'ovo_lacto','strict_egg_traces') if settings.get(k)]
@@ -420,24 +516,45 @@ diet_label = f"{t('diet_mode')}: **{t(mode)}**"
 if active_filters:
     diet_label += f"  |  {t('restrictions_active', n=len(active_filters))}"
 
-# Diet mode compact banner + Settings
-col1, col2 = st.columns([1, 0.2], gap='small')
+def _quick_country() -> None:
+    cid = st.session_state.get(_wk('quick_country'))
+    s = st.session_state['settings']
+    if cid in COUNTRIES and cid != country_cid(s.get('countries')):
+        apply_country(s, cid)
+        st.session_state['_ls_dirty'] = True
+        st.session_state['search_results'] = []  # results were for the old country
+        st.toast(t('country_changed', country=country_name(cid)))
+
+
+col1, col_country, col2 = st.columns([1, 0.32, 0.2], gap='small')
 with col1:
     st.markdown(diet_label)
+with col_country:
+    # Travellers: switch country in one tap, recent countries first
+    _cur_cid = country_cid(settings.get('countries'))
+    with st.popover(f"📍 {country_name(_cur_cid)}", width='stretch', help=t('country_switch_help')):
+        _ids = ordered_ids(settings.get('recent_countries'))
+        st.radio(t('change_country'), options=_ids, index=_ids.index(_cur_cid),
+                 format_func=country_name, key=_wk('quick_country'), on_change=_quick_country)
 with col2:
     if st.button(f"⚙️ {t('settings')}", key='settings_btn', help=t('go_to_settings'), width='stretch'):
         st.switch_page('pages/5_Settings.py')
 
-st.divider()
+# ── Two equal paths: scan / search by name ───────────────────────────────────
+def _chip_picked() -> None:
+    v = st.session_state.get('chip_pick')
+    if v:
+        st.session_state['pending_query'] = v
+    st.session_state['chip_pick'] = None
 
-# ── Search bar ───────────────────────────────────────────────────────────────
-# Pre-populate text box with scanned barcode before widget renders
-_scanned = st.session_state.pop('scanned_barcode', None)
-if _scanned:
-    st.session_state['search_query'] = _scanned
 
-col_search, col_scan = st.columns([5, 1])
+col_scan, col_search = st.columns(2, gap='medium')
+with col_scan:
+    st.caption(t('path_scan_hint'))
+    _label = ('✖ ' + t('close_scanner')) if st.session_state.get('show_scanner') else t('scan_big')
+    scan_clicked = st.button(_label, key='scan_btn', type='primary', width='stretch')
 with col_search:
+    st.caption(t('path_search_hint'))
     with st.form('search_form', border=False):
         query = st.text_input(
             label=t('search'),
@@ -445,9 +562,18 @@ with col_search:
             label_visibility='collapsed',
             key='search_query',
         )
-        search_clicked = st.form_submit_button(t('search_button'), type='primary')
-with col_scan:
-    scan_clicked = st.button(t('scan_barcode'), width='stretch')
+        search_clicked = st.form_submit_button(t('search_button'), width='stretch')
+
+# Quick chips: recent searches first, then common foods
+_chips: list[str] = []
+for _q in history.get_searches(4) + common_foods(get_lang()):
+    if _q and _normalize(_q) not in {_normalize(c) for c in _chips}:
+        _chips.append(_q)
+    if len(_chips) >= 10:
+        break
+if _chips:
+    st.pills(t('quick_search'), options=_chips, selection_mode='single', key='chip_pick',
+             on_change=_chip_picked, label_visibility='collapsed')
 
 if scan_clicked:
     _opening = not st.session_state.get('show_scanner', False)
@@ -471,7 +597,7 @@ if st.session_state.get('show_scanner'):
             _decoded = decode_image(_pil_img)
             st.session_state['show_scanner'] = False
             if _decoded and is_barcode(_decoded):
-                st.session_state['scanned_barcode'] = _decoded
+                st.session_state['pending_query'] = _decoded
             elif _decoded:
                 st.session_state['scan_invalid_code'] = _decoded
             else:
@@ -479,7 +605,7 @@ if st.session_state.get('show_scanner'):
             st.rerun()
         elif is_barcode(_result_str):
             st.session_state['show_scanner'] = False
-            st.session_state['scanned_barcode'] = _result_str
+            st.session_state['pending_query'] = _result_str
             st.rerun()
         else:
             # Non-numeric symbology (CODE_128 / CODE_39): tell the user instead of hanging
@@ -500,84 +626,70 @@ if st.session_state.pop('photo_retry', False):
         st.session_state['scanner_key'] = st.session_state.get('scanner_key', 0) + 1
         st.rerun()
 
-# Decide whether to run a search this run
+# Decide whether to run a lookup this run
 run_query = None
 if search_clicked and query.strip():
     run_query = query.strip()
-elif _scanned and query.strip():
-    run_query = query.strip()
 else:
-    _retry = st.session_state.pop('retry_query', None)
-    if _retry:
-        run_query = _retry
+    run_query = st.session_state.pop('pending_query', None)
 
 
 def _retry_search(code: str):
-    st.session_state['retry_query'] = code
+    st.session_state['pending_query'] = code
+
+
+def _open_from_history(entry: dict) -> None:
+    st.session_state['seen_on'] = {'id': entry.get('id'), 'date': entry.get('date')}
+    open_verdict(dict(entry['product']))
 
 
 if run_query:
     st.session_state.pop('conn_error_code', None)
-    products = []
-    conn_error = False
-    with st.spinner(t('searching')):
-        try:
-            cs = settings.get('countries', {})
-            cc = cs.get('cc') if isinstance(cs, dict) else None
-            is_mexico = cc == 'mx'
+    st.session_state['last_search_empty'] = False
+    cs = settings.get('countries', {})
+    cc = cs.get('cc') if isinstance(cs, dict) else None
+    is_mexico = cc == 'mx'
 
-            if is_barcode(run_query):
-                try:
-                    product = search_by_barcode(normalize_barcode(run_query))
-                except OFFConnectionError:
-                    product = None
-                    conn_error = True
-                    st.session_state['conn_error_code'] = run_query
-                products = [product] if product else []
-                if not product and not conn_error:
-                    if is_mexico:
-                        st.warning(t('smae_no_barcode'))
-                    else:
-                        st.warning(t('barcode_not_found_off', code=run_query))
-            elif is_mexico:
-                # Hybrid: SMAE first, then OFF Mexico
-                smae_results = smae_client.search_by_name(run_query, page_size=20)
-                try:
-                    off_results = search_by_name(run_query, page_size=10, country_code='mx')
-                except Exception:
-                    off_results = []
-                seen_names = {r['name'].lower() for r in smae_results}
-                products = smae_results + [
-                    p for p in off_results if p['name'].lower() not in seen_names
-                ]
-            else:
-                products = search_by_name(run_query, page_size=20, country_code=cc)
-        except Exception as e:
-            st.error(f"{t('error')}: {e}")
-            products = []
-
-    if products and is_barcode(run_query):
-        # Exact barcode lookup: never hide the product, just label it
-        for _p in products:
-            _p['_diet'] = resolve_diet(_p, settings)
-            _p['_classification'] = _p['_diet']['classification']
-    elif products:
-        products = classify_results(products, settings)
-
-    if products:
-        st.session_state['search_results'] = products
-        st.session_state['last_search_empty'] = False
-    else:
+    if is_barcode(run_query):
+        code = normalize_barcode(run_query)
         st.session_state['search_results'] = []
-        if conn_error:
-            st.session_state['last_search_empty'] = False
+        st.session_state['last_search_kind'] = 'barcode'
+        cached = history.find_recent(code)
+        if cached:
+            _open_from_history(cached)  # instant: no network
+        product, conn_error = None, False
+        with st.spinner(t('searching')):
+            try:
+                product = lookup_barcode(code)
+            except OFFConnectionError:
+                conn_error = True
+        if product:
+            open_verdict(product)
+        elif conn_error:
+            st.session_state['conn_error_code'] = run_query
         else:
             st.session_state['last_search_empty'] = True
-            if is_barcode(run_query):
-                st.session_state['contribute_prefill_barcode'] = normalize_barcode(run_query)
-            else:
-                st.session_state['contribute_prefill_name'] = run_query
-                st.warning(t('no_results'))
+            st.session_state['contribute_prefill_barcode'] = code
+            st.warning(t('smae_no_barcode') if is_mexico else t('barcode_not_found_off', code=run_query))
+    else:
+        history.add_search(run_query)
+        products, off_failed = [], False
+        with st.spinner(t('searching')):
+            try:
+                products, off_failed = smart_search(run_query, settings, history.get_searches(20))
+            except Exception as e:
+                st.error(f"{t('error')}: {e}")
+        st.session_state['search_results'] = products
+        st.session_state['search_off_failed'] = off_failed
+        st.session_state['search_q'] = run_query
+        st.session_state['last_search_kind'] = 'name'
+        if not products:
+            st.session_state['last_search_empty'] = True
+            st.session_state['contribute_prefill_name'] = run_query
+        else:
+            match = single_clear_match(products, run_query)
+            if match:
+                open_verdict(match)  # one clear match: straight to the verdict
 
 # ── Connection error (not the same as "not found") ───────────────────────────
 _conn_code = st.session_state.get('conn_error_code')
@@ -585,74 +697,44 @@ if _conn_code:
     st.error(t('connection_error'))
     st.button(t('retry_search'), key='retry_search_btn', on_click=_retry_search, args=(_conn_code,))
 
-# ── Contribute prompt (shown only after a genuinely empty search) ────────────
-if st.session_state.get('last_search_empty'):
-    st.divider()
+# ── Results (compact list with traffic lights) ───────────────────────────────
+results = st.session_state.get('search_results', [])
+
+if st.session_state.get('search_off_failed'):
+    st.warning(t('off_unavailable'))
+
+if st.session_state.get('last_search_empty') and not results and not _conn_code:
+    if st.session_state.get('last_search_kind') == 'name':
+        st.warning(t('no_results'))
     st.caption('🔍 ' + t('not_found_prompt'))
     st.page_link('pages/6_Contribute.py', label=t('contribute_button'), icon='➕')
 
-# ── Results ──────────────────────────────────────────────────────────────────
-results = st.session_state.get('search_results', [])
-
 if results:
     st.subheader(t('results_count', n=len(results)))
-
     for idx, product in enumerate(results):
-        with st.container(border=True):
-            c0, c1, c2, c3 = st.columns([0.6, 3, 2, 1])
+        v = product.get('_verdict') or compute_verdict(product, settings)
+        verdict_row(product, v, key=f'res_{idx}')
+else:
+    # ── Recent + my lists (only when not showing results) ───────────────────
+    _recent = history.get_recent(5)
+    if _recent:
+        st.markdown(f"**{t('recent')}**")
+        _cols = st.columns(len(_recent))
+        for _i, (_c, _e) in enumerate(zip(_cols, _recent)):
+            with _c:
+                _lbl = f"{STATUS_EMOJI.get(_e.get('status'), '🟡')} {(_e.get('name') or '?')[:22]}"
+                if st.button(_lbl, key=f'recent_{_i}', width='stretch', help=_e.get('name')):
+                    _open_from_history(_e)
+    _safe, _avoid = history.get_list('safe'), history.get_list('avoid')
+    if _safe or _avoid:
+        with st.expander(t('my_lists')):
+            for _name, _items, _title in (('safe', _safe, t('my_safe')), ('avoid', _avoid, t('my_avoid'))):
+                if _items:
+                    st.markdown(f"**{_title}**")
+                    for _i, _e in enumerate(_items[:20]):
+                        if st.button(f"{STATUS_EMOJI.get(_e.get('status'), '🟡')} {_e.get('name') or '?'}"
+                                     + (f" — {_e['brand']}" if _e.get('brand') else ''),
+                                     key=f'list_{_name}_{_i}', width='stretch'):
+                            _open_from_history(_e)
 
-            with c0:
-                if product.get('image_url'):
-                    st.image(product['image_url'], width=64)
-
-            with c1:
-                name = product.get('name') or 'Unknown'
-                brand = product.get('brand') or ''
-                source = product.get('_source', '')
-
-                cl = product.get('_classification', {}) or {}
-                allergy_hits = allergy_violations(cl) if cl else []
-                if allergy_hits:
-                    st.error('🚨 ' + t('allergy_warning', items=', '.join(allergy_hits[:3])))
-
-                st.markdown(f"**{name}**")
-                if source == 'smae':
-                    st.caption(f"🇲🇽 {t('smae_source_label')}")
-                elif brand:
-                    st.caption(brand)
-
-                # Ingredients preview (skip for SMAE entries — no real ingredient list)
-                if source != 'smae':
-                    ingr = product.get('ingredients', '')
-                    if ingr:
-                        preview = ingr[:120] + ('…' if len(ingr) > 120 else '')
-                        st.caption(f"_{preview}_")
-                    else:
-                        st.caption(f"_{t('no_ingredients')}_")
-                        st.caption('⚠️ ' + t('check_allergies_detail'))
-
-            with c2:
-                diet_tag, _ = _diet_tags(product)
-                st.markdown(diet_tag)
-
-                _src = (product.get('_diet') or {}).get('source', 'none')
-                st.caption(diet_source_label(_src))
-
-                filter_tag = _filter_tag(product)
-                if filter_tag:
-                    st.caption(filter_tag)
-
-                qty = product.get('quantity', '')
-                nutri = product.get('nutriscore', '')
-                if qty:
-                    st.caption(f"📦 {qty}")
-                if nutri and nutri in ('A', 'B', 'C', 'D', 'E'):
-                    st.caption(f"{t('nutriscore')}: **{nutri}**")
-
-            with c3:
-                if st.button(t('view_detail'), key=f'detail_{idx}', width='stretch'):
-                    st.session_state['selected_product'] = product
-                    st.session_state['portion_product'] = product
-                    st.session_state['equiv_original'] = product
-                    st.session_state['nav_from'] = 'pages/1_Detail.py'
-                    st.switch_page('pages/1_Detail.py')
+history.flush()
