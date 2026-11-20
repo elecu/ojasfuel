@@ -16,25 +16,31 @@ except ImportError:
 _LS_KEY = 'smaeuk_settings_v1'
 
 
-def load_from_localstorage() -> dict | None:
+def read_localstorage() -> tuple[bool, dict | None]:
     """
-    Read settings dict from localStorage.
-    Returns None on first render (JS not yet evaluated) or if nothing stored.
-    Caller should overlay on top of defaults, not replace them.
+    Read settings from localStorage.
+    Returns (ready, data). st_javascript returns 0 until the JS has been
+    evaluated in the browser; any other value (including None = nothing stored)
+    means the read completed.
     """
     if not _JS_OK:
-        return None
+        return True, None
     try:
         raw = st_javascript(f"JSON.parse(localStorage.getItem('{_LS_KEY}') || 'null')")
-        if raw and isinstance(raw, dict):
-            return raw
     except Exception:
-        pass
-    return None
+        return True, None
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw == 0:
+        return False, None
+    return True, (raw if isinstance(raw, dict) else None)
+
+
+def load_from_localstorage() -> dict | None:
+    """Backward-compatible wrapper: returns stored dict or None."""
+    return read_localstorage()[1]
 
 
 def save_to_localstorage(settings: dict) -> None:
-    """Write settings dict to localStorage. Call when user clicks Save Settings."""
+    """Write settings dict to localStorage. Called automatically when a setting changes."""
     if not _JS_OK:
         return
     try:

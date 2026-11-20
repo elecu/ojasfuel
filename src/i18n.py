@@ -3,6 +3,7 @@ Simple dict-based i18n. All UI strings defined here.
 Usage: from src.i18n import t, get_lang
 """
 
+import copy
 import streamlit as st
 
 _EN = {
@@ -160,7 +161,7 @@ _EN = {
     'diet_mode': 'Base Diet Mode',
     'vegan': 'Vegan',
     'vegetarian': 'Vegetarian',
-    'both': 'Both (show all)',
+    'both': 'Vegetarian + vegan (show all meat-free)',
     'extra_restrictions': 'Additional Restrictions',
     'no_garlic': 'No garlic',
     'no_onion': 'No onion',
@@ -274,7 +275,7 @@ _EN = {
     'allergies_gluten': 'Gluten',
 
     # Contribute page
-    'contribute_button': '➕ Add this product to Open Food Facts',
+    'contribute_button': 'Add this product to Open Food Facts',
     'contribute_title': 'Add a New Product',
     'contribute_subtitle': 'Help the community — this product will be submitted anonymously to Open Food Facts.',
     'contribute_barcode': 'Barcode (required)',
@@ -314,6 +315,104 @@ _EN = {
     'contribute_ocr_detected_ingr': 'Ingredients (edit if needed)',
     'contribute_ocr_detected_nutr': 'Nutrition info (edit if needed)',
     'contribute_ocr_unclassified': 'Other text not classified (marketing, brand, etc.)',
+    'veg_variant_help': 'Choose which animal products a vegetarian diet allows.',
+    'veg_lacto_ovo': 'Lacto-ovo (dairy and eggs OK)',
+    'settings_autosave': 'Changes are saved automatically.',
+    'settings_reset_done': 'Settings reset to defaults',
+    'country_mx': '🇲🇽 Mexico',
+    'country_us': '🇺🇸 United States',
+    'country_gb': '🇬🇧 United Kingdom',
+    'country_es': '🇪🇸 Spain',
+    'country_fr': '🇫🇷 France',
+    'country_de': '🇩🇪 Germany',
+    'country_it': '🇮🇹 Italy',
+    'country_nl': '🇳🇱 Netherlands',
+    'country_be': '🇧🇪 Belgium',
+    'country_ch': '🇨🇭 Switzerland',
+    'country_pt': '🇵🇹 Portugal',
+    'country_pl': '🇵🇱 Poland',
+    'country_europe': '🌍 Europe (all)',
+    'country_all_opt': 'All countries',
+    'country_ca': '🇨🇦 Canada',
+    'country_br': '🇧🇷 Brazil',
+    'country_ar': '🇦🇷 Argentina',
+    'country_co': '🇨🇴 Colombia',
+    'country_cl': '🇨🇱 Chile',
+    'country_jp': '🇯🇵 Japan',
+    'country_cn': '🇨🇳 China',
+    'country_in': '🇮🇳 India',
+    'country_unspecified': '— Not specified —',
+    'contribute_step1': '1. Barcode & name',
+    'contribute_step2': '2. Ingredients',
+    'contribute_step3': '3. Nutrition',
+    'contribute_step4': '4. Photo & submit',
+    'contribute_ocr_optional': 'OCR (optional): read text from a photo',
+    'contribute_open_camera': 'Open camera',
+    'contribute_cam_opt': '📷 Camera',
+    'contribute_up_opt': '📁 Upload image',
+    'contribute_image_source': 'Image source',
+    'contribute_upload_label': 'Upload an image',
+    'contribute_camera_label': 'Take a photo',
+    'contribute_add_nutrient': 'Add nutrient',
+    'contribute_add_btn': 'Add',
+    'contribute_ocr_missing': 'EasyOCR is not available. Install with: pip install easyocr pillow numpy',
+    'contribute_nutrient_hint': 'Use the OCR option above or the "Add nutrient" selector to add fields.',
+    'contribute_barcode_invalid': '❌ Barcode must be 8-14 digits (EAN/UPC format)',
+    'contribute_barcode_ph': 'e.g. 7501234567890',
+    'contribute_name_ph': 'e.g. Oat Milk Chocolate',
+    'contribute_brand_ph': 'e.g. Alpro',
+    'contribute_quantity_ph': 'e.g. 500ml',
+    'contribute_ingredients_ph': 'e.g. Oat base (water, oats 10%), cocoa 2%, salt...',
+    'contribute_front_photo': 'Front photo of the product (optional)',
+    'contribute_photo_ok': '📸 Photo uploaded.',
+    'contribute_photo_fail': '⚠️ The product was saved but the photo could not be uploaded.',
+    'contribute_view_product': 'View product on Open Food Facts',
+    'contribute_ocr_use_translated': '✅ Use translated text as ingredients',
+    'contribute_translate_hint': 'Translate the ingredients to English (OFF prefers English).',
+    # pages (detail/portions/equivalents/home)
+    'diet_source_off': 'Verified by Open Food Facts',
+    'diet_source_smae': 'Mexican SMAE food database',
+    'diet_source_ingredients': 'Estimated from ingredients',
+    'diet_source_none': 'No diet data',
+    'check_allergies_detail': 'Ingredients unavailable: open the detail page to check allergens.',
+    'auto_classification_disclaimer': 'Automatic classification. Always check the product label, especially for allergies.',
+    'allergy_warning': 'Allergy warning: {items}',
+    'capture_photo': 'Capture',
+    'manual_barcode_hint': 'You can also type or paste a barcode in the search box.',
+    'barcode_non_numeric': 'Scanned code "{code}" is not a product barcode (numeric EAN/UPC).',
+    'connection_error': 'Connection error. Could not reach Open Food Facts.',
+    'retry_search': 'Retry',
+    'connection_error_partial': 'Connection error: showing partial product data.',
+    'smae_info': 'SMAE information',
+    'smae_group': 'Group',
+    'smae_subgroup': 'Subgroup',
+    'smae_values_per_100g': 'Values normalized to 100 g.',
+    'per_100g': 'Values per 100 g',
+    'amount_per_100g': 'Per 100 g',
+    'nutrient_cholesterol': 'Cholesterol (mg)',
+    'nutrient_alcohol': 'Alcohol (g)',
+    'nutrient_potassium': 'Potassium (mg)',
+    'nutrient_calcium': 'Calcium (mg)',
+    'nutrient_iron': 'Iron (mg)',
+    'nutrient_magnesium': 'Magnesium (mg)',
+    'nutrient_phosphorus': 'Phosphorus (mg)',
+    'nutrient_zinc': 'Zinc (mg)',
+    'nutrient_manganese': 'Manganese (mg)',
+    'nutrient_copper': 'Copper (mg)',
+    'nutrient_selenium': 'Selenium (µg)',
+    'nutrient_iodine': 'Iodine (µg)',
+    'nutrient_vitamin_a': 'Vitamin A (µg)',
+    'nutrient_vitamin_b1': 'Vitamin B1 (mg)',
+    'nutrient_vitamin_b2': 'Vitamin B2 (mg)',
+    'nutrient_vitamin_b3': 'Vitamin B3 (mg)',
+    'nutrient_vitamin_b6': 'Vitamin B6 (mg)',
+    'nutrient_vitamin_b9': 'Vitamin B9 (µg)',
+    'nutrient_vitamin_b12': 'Vitamin B12 (µg)',
+    'nutrient_vitamin_c': 'Vitamin C (mg)',
+    'nutrient_vitamin_d': 'Vitamin D (µg)',
+    'nutrient_vitamin_e': 'Vitamin E (mg)',
+    'nutrient_vitamin_k': 'Vitamin K (µg)',
+    'nutrient_caffeine': 'Caffeine (mg)',
 }
 
 _ES = {
@@ -471,7 +570,7 @@ _ES = {
     'diet_mode': 'Modo Dietético Base',
     'vegan': 'Vegano',
     'vegetarian': 'Vegetariano',
-    'both': 'Ambos (mostrar todo)',
+    'both': 'Vegetariano + vegano (mostrar todo sin carne)',
     'extra_restrictions': 'Restricciones Adicionales',
     'no_garlic': 'Sin ajo',
     'no_onion': 'Sin cebolla',
@@ -585,7 +684,7 @@ _ES = {
     'allergies_gluten': 'Gluten',
 
     # Contribute page
-    'contribute_button': '➕ Agregar este producto a Open Food Facts',
+    'contribute_button': 'Agregar este producto a Open Food Facts',
     'contribute_title': 'Agregar Nuevo Producto',
     'contribute_subtitle': 'Ayuda a la comunidad — este producto se enviará de forma anónima a Open Food Facts.',
     'contribute_barcode': 'Código de barras (requerido)',
@@ -625,6 +724,104 @@ _ES = {
     'contribute_ocr_detected_ingr': 'Ingredientes (edita si es necesario)',
     'contribute_ocr_detected_nutr': 'Información nutricional (edita si es necesario)',
     'contribute_ocr_unclassified': 'Otro texto no clasificado (marketing, marca, etc.)',
+    'veg_variant_help': 'Elige qué productos animales permite la dieta vegetariana.',
+    'veg_lacto_ovo': 'Lacto-ovo (lácteos y huevos OK)',
+    'settings_autosave': 'Los cambios se guardan automáticamente.',
+    'settings_reset_done': 'Configuración restablecida',
+    'country_mx': '🇲🇽 México',
+    'country_us': '🇺🇸 Estados Unidos',
+    'country_gb': '🇬🇧 Reino Unido',
+    'country_es': '🇪🇸 España',
+    'country_fr': '🇫🇷 Francia',
+    'country_de': '🇩🇪 Alemania',
+    'country_it': '🇮🇹 Italia',
+    'country_nl': '🇳🇱 Países Bajos',
+    'country_be': '🇧🇪 Bélgica',
+    'country_ch': '🇨🇭 Suiza',
+    'country_pt': '🇵🇹 Portugal',
+    'country_pl': '🇵🇱 Polonia',
+    'country_europe': '🌍 Europa (todos)',
+    'country_all_opt': 'Todos los países',
+    'country_ca': '🇨🇦 Canadá',
+    'country_br': '🇧🇷 Brasil',
+    'country_ar': '🇦🇷 Argentina',
+    'country_co': '🇨🇴 Colombia',
+    'country_cl': '🇨🇱 Chile',
+    'country_jp': '🇯🇵 Japón',
+    'country_cn': '🇨🇳 China',
+    'country_in': '🇮🇳 India',
+    'country_unspecified': '— Sin especificar —',
+    'contribute_step1': '1. Código de barras y nombre',
+    'contribute_step2': '2. Ingredientes',
+    'contribute_step3': '3. Nutrición',
+    'contribute_step4': '4. Foto y envío',
+    'contribute_ocr_optional': 'OCR (opcional): leer texto de una foto',
+    'contribute_open_camera': 'Activar cámara',
+    'contribute_cam_opt': '📷 Cámara',
+    'contribute_up_opt': '📁 Subir imagen',
+    'contribute_image_source': 'Fuente de imagen',
+    'contribute_upload_label': 'Subir una imagen',
+    'contribute_camera_label': 'Tomar una foto',
+    'contribute_add_nutrient': 'Agregar nutriente',
+    'contribute_add_btn': 'Agregar',
+    'contribute_ocr_missing': 'EasyOCR no disponible. Instala con: pip install easyocr pillow numpy',
+    'contribute_nutrient_hint': 'Usa la opción de OCR arriba o el selector "Agregar nutriente" para añadir campos.',
+    'contribute_barcode_invalid': '❌ El código de barras debe tener de 8 a 14 dígitos (formato EAN/UPC)',
+    'contribute_barcode_ph': 'p. ej. 7501234567890',
+    'contribute_name_ph': 'p. ej. Leche de avena con chocolate',
+    'contribute_brand_ph': 'p. ej. Alpro',
+    'contribute_quantity_ph': 'p. ej. 500 ml',
+    'contribute_ingredients_ph': 'p. ej. Base de avena (agua, avena 10%), cacao 2%, sal...',
+    'contribute_front_photo': 'Foto frontal del producto (opcional)',
+    'contribute_photo_ok': '📸 Foto subida.',
+    'contribute_photo_fail': '⚠️ El producto se guardó pero no se pudo subir la foto.',
+    'contribute_view_product': 'Ver producto en Open Food Facts',
+    'contribute_ocr_use_translated': '✅ Usar texto traducido como ingredientes',
+    'contribute_translate_hint': 'Traduce los ingredientes al inglés (OFF prefiere inglés).',
+    # pages (detail/portions/equivalents/home)
+    'diet_source_off': 'Verificado por Open Food Facts',
+    'diet_source_smae': 'Base de datos SMAE (México)',
+    'diet_source_ingredients': 'Estimado a partir de los ingredientes',
+    'diet_source_none': 'Sin datos de dieta',
+    'check_allergies_detail': 'Ingredientes no disponibles: abre el detalle para revisar alérgenos.',
+    'auto_classification_disclaimer': 'Clasificación automática. Revisa siempre la etiqueta del producto, sobre todo si tienes alergias.',
+    'allergy_warning': 'Alerta de alergia: {items}',
+    'capture_photo': 'Capturar',
+    'manual_barcode_hint': 'También puedes escribir o pegar un código de barras en el buscador.',
+    'barcode_non_numeric': 'El código escaneado "{code}" no es un código de barras de producto (EAN/UPC numérico).',
+    'connection_error': 'Error de conexión. No se pudo contactar a Open Food Facts.',
+    'retry_search': 'Reintentar',
+    'connection_error_partial': 'Error de conexión: se muestran datos parciales del producto.',
+    'smae_info': 'Información SMAE',
+    'smae_group': 'Grupo',
+    'smae_subgroup': 'Subgrupo',
+    'smae_values_per_100g': 'Valores normalizados a 100 g.',
+    'per_100g': 'Valores por 100 g',
+    'amount_per_100g': 'Por 100 g',
+    'nutrient_cholesterol': 'Colesterol (mg)',
+    'nutrient_alcohol': 'Alcohol (g)',
+    'nutrient_potassium': 'Potasio (mg)',
+    'nutrient_calcium': 'Calcio (mg)',
+    'nutrient_iron': 'Hierro (mg)',
+    'nutrient_magnesium': 'Magnesio (mg)',
+    'nutrient_phosphorus': 'Fósforo (mg)',
+    'nutrient_zinc': 'Zinc (mg)',
+    'nutrient_manganese': 'Manganeso (mg)',
+    'nutrient_copper': 'Cobre (mg)',
+    'nutrient_selenium': 'Selenio (µg)',
+    'nutrient_iodine': 'Yodo (µg)',
+    'nutrient_vitamin_a': 'Vitamina A (µg)',
+    'nutrient_vitamin_b1': 'Vitamina B1 (mg)',
+    'nutrient_vitamin_b2': 'Vitamina B2 (mg)',
+    'nutrient_vitamin_b3': 'Vitamina B3 (mg)',
+    'nutrient_vitamin_b6': 'Vitamina B6 (mg)',
+    'nutrient_vitamin_b9': 'Vitamina B9 (µg)',
+    'nutrient_vitamin_b12': 'Vitamina B12 (µg)',
+    'nutrient_vitamin_c': 'Vitamina C (mg)',
+    'nutrient_vitamin_d': 'Vitamina D (µg)',
+    'nutrient_vitamin_e': 'Vitamina E (mg)',
+    'nutrient_vitamin_k': 'Vitamina K (µg)',
+    'nutrient_caffeine': 'Cafeína (mg)',
 }
 
 _TRANSLATIONS = {'en': _EN, 'es': _ES}
@@ -648,7 +845,9 @@ DEFAULT_SETTINGS = {
     'allergies_mustard': False,
     'allergies_sesame': False,
     'allergies_gluten': False,
-    'equivalents_threshold': 0.25,
+    'equivalents_threshold': 0.15,
+    'veg_variant': 'lacto_ovo',  # 'lacto_ovo' | 'lacto' | 'ovo'
+    'theme': 'dark',
     'lang': 'en',
     'countries': {'tags': [], 'cc': None},  # empty = all countries
 }
@@ -672,32 +871,96 @@ def t(key: str, **kwargs) -> str:
     return text
 
 
-def init_session() -> None:
-    """Initialise all required session_state keys with defaults, then overlay localStorage."""
+def apply_veg_variant(settings: dict) -> None:
+    """Derive legacy booleans (lacto/ovo) used by the classifier from veg_variant."""
+    v = settings.get('veg_variant', 'lacto_ovo')
+    if v not in ('lacto_ovo', 'lacto', 'ovo'):
+        v = 'lacto_ovo'
+    settings['veg_variant'] = v
+    settings['lacto'] = (v == 'lacto')   # lacto-vegetarian: no eggs
+    settings['ovo'] = (v == 'ovo')       # ovo-vegetarian: no dairy
+    settings['ovo_lacto'] = False        # legacy key, no longer used
+
+
+def get_settings() -> dict:
+    """Return the live settings dict (initialising the session if needed)."""
     if 'settings' not in st.session_state:
-        st.session_state['settings'] = dict(DEFAULT_SETTINGS)
+        init_session()
+    return st.session_state['settings']
+
+
+def _merge_saved(saved: dict) -> None:
+    s = st.session_state['settings']
+    if 'veg_variant' not in saved:
+        lacto, ovo = saved.get('lacto'), saved.get('ovo')
+        if lacto and not ovo:
+            saved = {**saved, 'veg_variant': 'lacto'}
+        elif ovo and not lacto:
+            saved = {**saved, 'veg_variant': 'ovo'}
+        else:
+            saved = {**saved, 'veg_variant': 'lacto_ovo'}
+    for k, v in saved.items():
+        if k in DEFAULT_SETTINGS and _valid_setting(k, v):
+            s[k] = v
+    apply_veg_variant(s)
+
+
+_ALLOWED_VALUES = {
+    'mode': {'vegetarian', 'vegan', 'both'},
+    'veg_variant': {'lacto_ovo', 'lacto', 'ovo'},
+    'theme': {'dark', 'light'},
+    'lang': set(_TRANSLATIONS),
+}
+
+
+def _valid_setting(key: str, value) -> bool:
+    """Reject corrupted stored values (e.g. a translated label instead of the id)."""
+    if key in _ALLOWED_VALUES:
+        return value in _ALLOWED_VALUES[key]
+    default = DEFAULT_SETTINGS[key]
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if key == 'equivalents_threshold':
+        return isinstance(value, (int, float)) and 0 < value < 1
+    if key == 'countries':
+        return isinstance(value, (dict, list))
+    return True
+
+
+def init_session() -> None:
+    """Initialise session_state with defaults, then overlay browser localStorage once."""
+    if 'settings' not in st.session_state:
+        st.session_state['settings'] = copy.deepcopy(DEFAULT_SETTINGS)
     else:
         for k, v in DEFAULT_SETTINGS.items():
-            st.session_state['settings'].setdefault(k, v)
+            st.session_state['settings'].setdefault(k, copy.deepcopy(v))
+    s = st.session_state['settings']
+    apply_veg_variant(s)
 
-    # Overlay with user's saved settings from browser localStorage
-    # (returns None on first Streamlit render — that's fine, defaults are already set)
-    if not st.session_state.get('_ls_loaded'):
-        try:
-            from src.storage import load_from_localstorage
-            saved = load_from_localstorage()
-            if saved and isinstance(saved, dict):
-                for k, v in saved.items():
-                    if k in DEFAULT_SETTINGS:
-                        st.session_state['settings'][k] = v
+    try:
+        from src.storage import (read_localstorage, save_to_localstorage,
+                                 clear_localstorage)
+        if st.session_state.pop('_pending_ls_clear', False):
+            # Reset requested on previous run: wipe browser storage first.
+            clear_localstorage()
+            st.session_state['_ls_loaded'] = True
+        elif st.session_state.pop('_ls_dirty', False):
+            save_to_localstorage(s)
+            st.session_state['_ls_loaded'] = True
+        elif not st.session_state.get('_ls_loaded'):
+            ready, saved = read_localstorage()
+            if ready:
+                if saved:
+                    _merge_saved(saved)
                 st.session_state['_ls_loaded'] = True
-        except Exception:
-            pass
+    except Exception:
+        st.session_state['_ls_loaded'] = True
+
+    # Theme lives in settings so it persists; session_state['theme'] mirrors it.
+    st.session_state['theme'] = s.get('theme', 'dark')
 
     st.session_state.setdefault('selected_product', None)
     st.session_state.setdefault('search_results', [])
     st.session_state.setdefault('saved_portions', [])
     st.session_state.setdefault('portion_product', None)
     st.session_state.setdefault('equiv_original', None)
-    # Theme: 'dark' | 'light' — propagated across all pages via session_state
-    st.session_state.setdefault('theme', 'dark')

@@ -1,98 +1,130 @@
 """
-OjasFuel — Settings page
+OjasFuel — Settings page (auto-saving)
 """
 
+import copy
 import streamlit as st
-import sys
-sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
 
-from src.i18n import t, init_session, DEFAULT_SETTINGS
+from src.i18n import _valid_setting, get_lang, t, init_session, DEFAULT_SETTINGS, apply_veg_variant
 from src.theme import inject_theme
-from src.storage import save_to_localstorage, clear_localstorage
 
 st.set_page_config(page_title='OjasFuel — Settings', page_icon='⚙️', layout='wide')
 init_session()
 inject_theme()
 
+# Each id → {tags, cc}. cc = OFF country code (country subdomain, better coverage);
+# tags = client-side post-filter on countries_tags.
+COUNTRIES = {
+    'all': {'tags': [], 'cc': None},
+    'mx': {'tags': ['en:mexico'], 'cc': 'mx'},
+    'us': {'tags': ['en:united-states'], 'cc': 'us'},
+    'gb': {'tags': ['en:united-kingdom'], 'cc': 'gb'},
+    'es': {'tags': ['en:spain'], 'cc': 'es'},
+    'fr': {'tags': ['en:france'], 'cc': 'fr'},
+    'de': {'tags': ['en:germany'], 'cc': 'de'},
+    'it': {'tags': ['en:italy'], 'cc': 'it'},
+    'nl': {'tags': ['en:netherlands'], 'cc': 'nl'},
+    'be': {'tags': ['en:belgium'], 'cc': 'be'},
+    'ch': {'tags': ['en:switzerland'], 'cc': 'ch'},
+    'pt': {'tags': ['en:portugal'], 'cc': 'pt'},
+    'pl': {'tags': ['en:poland'], 'cc': 'pl'},
+    'europe': {'tags': [
+        'en:united-kingdom', 'en:france', 'en:germany', 'en:italy', 'en:spain',
+        'en:netherlands', 'en:belgium', 'en:switzerland', 'en:portugal', 'en:poland',
+        'en:austria', 'en:sweden', 'en:denmark', 'en:norway', 'en:finland',
+    ], 'cc': None},
+}
+THRESHOLDS = [5, 10, 15, 20, 25, 30]
+
+
+def _country_name(cid: str) -> str:
+    return t('country_all_opt') if cid == 'all' else t(f'country_{cid}')
+
+
+def _wk(name: str) -> str:
+    """Widget key scoped to the UI language.
+
+    Streamlit sends radio/select values from the browser as their *formatted
+    label*; when the language changes the old label ("Dark") no longer maps to
+    an option and the raw label leaks into settings. A per-language key makes
+    the widgets rebuild from the stored setting instead.
+    """
+    return f'set_{name}_{get_lang()}'
+
+
+# ── Callbacks: update session settings, flag persistence, toast ──────────────
+def _changed(key: str, widget_key: str, transform=lambda v: v) -> None:
+    s = st.session_state['settings']
+    value = transform(st.session_state[widget_key])
+    if not _valid_setting(key, value):
+        return  # never persist a stray label
+    s[key] = value
+    if key == 'veg_variant':
+        apply_veg_variant(s)
+    if key == 'theme':
+        st.session_state['theme'] = s['theme']
+    st.session_state['_ls_dirty'] = True
+    st.toast(t('settings_saved'))
+
+
+def _reset() -> None:
+    st.session_state['settings'] = copy.deepcopy(DEFAULT_SETTINGS)
+    for k in [k for k in st.session_state if str(k).startswith('set_')]:
+        del st.session_state[k]
+    st.session_state['_pending_ls_clear'] = True
+    st.toast(t('settings_reset_done'))
+
+
+def _country_cid(setting) -> str:
+    if isinstance(setting, list):  # backward compat: old format was a plain list
+        setting = {'tags': setting, 'cc': None}
+    for cid, v in COUNTRIES.items():
+        if v['cc'] == setting.get('cc') and sorted(v['tags']) == sorted(setting.get('tags', [])):
+            return cid
+    return 'all'
+
+
+s = st.session_state['settings']
+
 if st.button(t('back')):
     st.switch_page('app.py')
 
 st.title(f"⚙️ {t('settings')}")
-
-s = st.session_state['settings']
+st.caption(t('settings_autosave'))
 
 # ── Appearance / Theme ───────────────────────────────────────────────────────
 st.subheader(t('appearance'))
-
-current_theme = st.session_state.get('theme', 'dark')
 theme_col, _ = st.columns([2, 3])
 with theme_col:
-    st.markdown(f'<p class="theme-toggle-label">{t("color_theme")}</p>', unsafe_allow_html=True)
-    theme_choice = st.radio(
+    st.radio(
         t('color_theme'),
-        options=[t('theme_dark'), t('theme_light')],
-        index=0 if current_theme == 'dark' else 1,
+        options=['dark', 'light'],
+        format_func=lambda v: t('theme_dark') if v == 'dark' else t('theme_light'),
+        index=0 if s.get('theme', 'dark') == 'dark' else 1,
         horizontal=True,
-        label_visibility='collapsed',
+        key=_wk('theme'),
+        on_change=_changed, args=('theme', _wk('theme')),
     )
-    new_theme = 'dark' if theme_choice == t('theme_dark') else 'light'
-    if new_theme != current_theme:
-        st.session_state['theme'] = new_theme
-        st.rerun()
 
 st.divider()
 
 # ── Country filter ────────────────────────────────────────────────────────────
 st.subheader(t('country_filter'))
-
-# Each entry: display name → {tags: [...], cc: '2-letter-code' | None}
-# cc = OFF country code used to query the country-specific subdomain (better coverage)
-# tags = used for client-side post-filter on countries_tags metadata
-COUNTRIES = {
-    'All countries':          {'tags': [],                         'cc': None},
-    '🇲🇽 Mexico':            {'tags': ['en:mexico'],              'cc': 'mx'},
-    '🇺🇸 United States':     {'tags': ['en:united-states'],       'cc': 'us'},
-    '🇬🇧 United Kingdom':    {'tags': ['en:united-kingdom'],      'cc': 'gb'},
-    '🇪🇸 Spain':             {'tags': ['en:spain'],               'cc': 'es'},
-    '🇫🇷 France':            {'tags': ['en:france'],              'cc': 'fr'},
-    '🇩🇪 Germany':           {'tags': ['en:germany'],             'cc': 'de'},
-    '🇮🇹 Italy':             {'tags': ['en:italy'],               'cc': 'it'},
-    '🇳🇱 Netherlands':       {'tags': ['en:netherlands'],         'cc': 'nl'},
-    '🇧🇪 Belgium':           {'tags': ['en:belgium'],             'cc': 'be'},
-    '🇨🇭 Switzerland':       {'tags': ['en:switzerland'],         'cc': 'ch'},
-    '🇵🇹 Portugal':          {'tags': ['en:portugal'],            'cc': 'pt'},
-    '🇵🇱 Poland':            {'tags': ['en:poland'],              'cc': 'pl'},
-    # Regional group
-    '🌍 Europe (all)':        {'tags': [
-        'en:united-kingdom','en:france','en:germany','en:italy','en:spain',
-        'en:netherlands','en:belgium','en:switzerland','en:portugal','en:poland',
-        'en:austria','en:sweden','en:denmark','en:norway','en:finland',
-    ], 'cc': None},
-}
-
-current_setting = s.get('countries', {'tags': [], 'cc': None})
-# backward compat: old format was a plain list
-if isinstance(current_setting, list):
-    current_setting = {'tags': current_setting, 'cc': None}
-
-current_display = next(
-    (name for name, v in COUNTRIES.items() if v['cc'] == current_setting.get('cc') and sorted(v['tags']) == sorted(current_setting.get('tags', []))),
-    'All countries'
-)
-
-country_choice = st.selectbox(
+_ids = list(COUNTRIES.keys())
+st.selectbox(
     t('country_filter'),
-    options=list(COUNTRIES.keys()),
-    index=list(COUNTRIES.keys()).index(current_display),
+    options=_ids,
+    format_func=_country_name,
+    index=_ids.index(_country_cid(s.get('countries', {'tags': [], 'cc': None}))),
     help=t('country_filter_help'),
     label_visibility='collapsed',
+    key=_wk('country'),
+    on_change=_changed, args=('countries', _wk('country'), lambda cid: copy.deepcopy(COUNTRIES[cid])),
 )
-s['countries'] = COUNTRIES[country_choice]
-
-chosen = COUNTRIES[country_choice]
-if chosen['cc']:
-    st.caption(t('country_search_msg', country=country_choice.split(' ', 1)[-1]))
-elif chosen['tags']:
+chosen = s.get('countries') or {'tags': [], 'cc': None}
+if chosen.get('cc'):
+    st.caption(t('country_search_msg', country=_country_name(_country_cid(chosen)).split(' ', 1)[-1]))
+elif chosen.get('tags'):
     st.caption(t('client_filter_only'))
 else:
     st.caption(t('country_all'))
@@ -101,117 +133,115 @@ st.divider()
 
 # ── Language ─────────────────────────────────────────────────────────────────
 st.subheader(t('language'))
-lang_map = {'English (UK)': 'en', 'Español': 'es'}
-lang_display = {v: k for k, v in lang_map.items()}
-lang_choice = st.radio(
+_langs = ['en', 'es']
+st.radio(
     t('language'),
-    options=list(lang_map.keys()),
-    index=list(lang_map.values()).index(s.get('lang', 'en')),
+    options=_langs,
+    format_func=lambda v: {'en': 'English (UK)', 'es': 'Español'}[v],
+    index=_langs.index(s.get('lang', 'en')) if s.get('lang', 'en') in _langs else 0,
     horizontal=True,
     label_visibility='collapsed',
+    key=_wk('lang'),
+    on_change=_changed, args=('lang', _wk('lang')),
 )
-s['lang'] = lang_map[lang_choice]
 
 st.divider()
 
 # ── Diet mode ─────────────────────────────────────────────────────────────────
 st.subheader(t('diet_mode'))
-mode_map = {t('vegetarian'): 'vegetarian', t('vegan'): 'vegan', t('both'): 'both'}
-mode_display = {v: k for k, v in mode_map.items()}
-mode_choice = st.radio(
+_modes = ['vegetarian', 'vegan', 'both']
+st.radio(
     t('diet_mode'),
-    options=list(mode_map.keys()),
-    index=list(mode_map.values()).index(s.get('mode', 'vegetarian')),
+    options=_modes,
+    format_func=lambda m: t(m),
+    index=_modes.index(s.get('mode', 'vegetarian')) if s.get('mode') in _modes else 0,
     horizontal=True,
     label_visibility='collapsed',
+    key=_wk('mode'),
+    on_change=_changed, args=('mode', _wk('mode')),
 )
-s['mode'] = mode_map[mode_choice]
 
-st.divider()
+# ── Vegetarian variant (only meaningful for vegetarian mode) ─────────────────
+if s.get('mode', 'vegetarian') == 'vegetarian':
+    st.markdown(f"**{t('dairy_variants')}**")
+    _variants = ['lacto_ovo', 'lacto', 'ovo']
+    _vlabels = {'lacto_ovo': t('veg_lacto_ovo'), 'lacto': t('lacto'), 'ovo': t('ovo')}
+    st.radio(
+        t('dairy_variants'),
+        options=_variants,
+        format_func=lambda v: _vlabels[v],
+        index=_variants.index(s.get('veg_variant', 'lacto_ovo')),
+        label_visibility='collapsed',
+        help=t('veg_variant_help'),
+        key=_wk('veg_variant'),
+        on_change=_changed, args=('veg_variant', _wk('veg_variant')),
+    )
 
-# ── Dairy & Egg variants ──────────────────────────────────────────────────────
-st.subheader(t('dairy_variants'))
-col1, col2, col3 = st.columns(3)
-with col1:
-    s['lacto'] = st.checkbox(t('lacto'), value=s.get('lacto', False),
-                              help=t('lacto_help'))
-with col2:
-    s['ovo'] = st.checkbox(t('ovo'), value=s.get('ovo', False),
-                            help=t('ovo_help'))
-with col3:
-    s['ovo_lacto'] = st.checkbox(t('ovo_lacto'), value=s.get('ovo_lacto', False),
-                                  help=t('ovo_lacto_help'))
-
-s['strict_egg_traces'] = st.checkbox(
+st.checkbox(
     t('strict_egg_traces'),
     value=s.get('strict_egg_traces', False),
     help=t('strict_egg_traces_help'),
+    key=_wk('strict_egg_traces'),
+    on_change=_changed, args=('strict_egg_traces', _wk('strict_egg_traces')),
 )
 
 st.divider()
 
+
+def _checkbox(key: str, help_key: str | None = None) -> None:
+    st.checkbox(
+        t(key), value=s.get(key, False),
+        help=t(help_key) if help_key else None,
+        key=_wk(key),
+        on_change=_changed, args=(key, _wk(key)),
+    )
+
+
+# ── Allergies (safety-critical: shown first, expanded when any active) ───────
+_allergy_keys = ['allergies_nuts', 'allergies_peanuts', 'allergies_soy',
+                 'allergies_mustard', 'allergies_sesame', 'allergies_gluten']
+with st.expander(t('allergies'), expanded=any(s.get(k) for k in _allergy_keys)):
+    col_a, col_b = st.columns(2)
+    with col_a:
+        for k in _allergy_keys[:3]:
+            _checkbox(k)
+    with col_b:
+        for k in _allergy_keys[3:]:
+            _checkbox(k)
+
 # ── Additional restrictions ───────────────────────────────────────────────────
-with st.expander(t('extra_restrictions'), expanded=False):
+_extra_keys = ['no_garlic', 'no_onion', 'no_caffeine', 'no_alcohol',
+               'no_mushrooms', 'no_gelatin', 'jain']
+with st.expander(t('extra_restrictions'), expanded=any(s.get(k) for k in _extra_keys)):
     col_a, col_b = st.columns(2)
     with col_a:
-        s['no_garlic'] = st.checkbox(t('no_garlic'), value=s.get('no_garlic', False))
-        s['no_onion'] = st.checkbox(t('no_onion'), value=s.get('no_onion', False))
-        s['no_caffeine'] = st.checkbox(t('no_caffeine'), value=s.get('no_caffeine', False))
-        s['no_alcohol'] = st.checkbox(t('no_alcohol'), value=s.get('no_alcohol', False))
+        for k in ('no_garlic', 'no_onion', 'no_caffeine', 'no_alcohol'):
+            _checkbox(k)
     with col_b:
-        s['no_mushrooms'] = st.checkbox(t('no_mushrooms'), value=s.get('no_mushrooms', False))
-        s['no_gelatin'] = st.checkbox(t('no_gelatin'), value=s.get('no_gelatin', False))
-        s['jain'] = st.checkbox(
-            t('jain'),
-            value=s.get('jain', False),
-            help=t('jain_help'),
-        )
-
-st.divider()
-
-# ── Allergies ──────────────────────────────────────────────────────────────────
-with st.expander(t('allergies'), expanded=False):
-    col_a, col_b = st.columns(2)
-    with col_a:
-        s['allergies_nuts'] = st.checkbox(t('allergies_nuts'), value=s.get('allergies_nuts', False))
-        s['allergies_peanuts'] = st.checkbox(t('allergies_peanuts'), value=s.get('allergies_peanuts', False))
-        s['allergies_soy'] = st.checkbox(t('allergies_soy'), value=s.get('allergies_soy', False))
-    with col_b:
-        s['allergies_mustard'] = st.checkbox(t('allergies_mustard'), value=s.get('allergies_mustard', False))
-        s['allergies_sesame'] = st.checkbox(t('allergies_sesame'), value=s.get('allergies_sesame', False))
-        s['allergies_gluten'] = st.checkbox(t('allergies_gluten'), value=s.get('allergies_gluten', False))
+        for k in ('no_mushrooms', 'no_gelatin'):
+            _checkbox(k)
+        _checkbox('jain', 'jain_help')
 
 st.divider()
 
 # ── Equivalents threshold ─────────────────────────────────────────────────────
 st.subheader(t('equivalents_threshold'))
-threshold_pct = round(s.get('equivalents_threshold', 0.10) * 100)
-if threshold_pct not in [5, 10, 15, 20]:
-    threshold_pct = 10
-threshold_pct = st.select_slider(
-    t('threshold_label', pct=threshold_pct),
-    options=[5, 10, 15, 20],
-    value=threshold_pct,
+_pct = round(s.get('equivalents_threshold', 0.15) * 100)
+_pct = min(THRESHOLDS, key=lambda o: abs(o - _pct))
+st.select_slider(
+    t('equivalents_threshold'),
+    options=THRESHOLDS,
+    value=_pct,
+    format_func=lambda v: f'±{v}%',
     label_visibility='collapsed',
+    key=_wk('threshold'),
+    on_change=_changed, args=('equivalents_threshold', _wk('threshold'), lambda v: v / 100),
 )
-s['equivalents_threshold'] = threshold_pct / 100
-st.caption(t('threshold_label', pct=threshold_pct))
+st.caption(t('threshold_label', pct=round(s.get('equivalents_threshold', 0.15) * 100)))
 
 st.divider()
 
-# ── Save / Reset ──────────────────────────────────────────────────────────────
-col_save, col_reset = st.columns([2, 1])
-with col_save:
-    if st.button(t('save_settings'), type='primary', use_container_width=True):
-        st.session_state['settings'] = s
-        save_to_localstorage(s)   # persist to browser localStorage
-        st.success(t('settings_saved'))
-with col_reset:
-    if st.button(t('reset_settings'), use_container_width=True):
-        st.session_state['settings'] = dict(DEFAULT_SETTINGS)
-        st.session_state['_ls_loaded'] = False
-        clear_localstorage()      # wipe localStorage too
-        st.rerun()
+st.button(t('reset_settings'), on_click=_reset, width='stretch')
 
 st.divider()
 

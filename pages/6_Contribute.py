@@ -1,12 +1,12 @@
 """
 OjasFuel — Contribute: submit a missing product to Open Food Facts anonymously.
+Steps: 1) barcode & name  2) ingredients (OCR optional)  3) nutrition (OCR optional)  4) photo & submit.
 """
 
-import streamlit as st
-import sys
 import io
 import re
-sys.path.insert(0, '/home/eherrera-chacon/Documents/smaeuk')
+
+import streamlit as st
 
 from src.i18n import t, init_session
 from src.theme import inject_theme
@@ -37,24 +37,24 @@ try:
 except ImportError:
     _img_ok = False
 
-# ── Country list (OFF tag → display label) ────────────────────────────────────
-_COUNTRIES = {
-    '': '— Sin especificar / Not specified —',
-    'en:mexico': '🇲🇽 México',
-    'en:united-states': '🇺🇸 United States',
-    'en:canada': '🇨🇦 Canada',
-    'en:france': '🇫🇷 France',
-    'en:spain': '🇪🇸 Spain',
-    'en:germany': '🇩🇪 Germany',
-    'en:brazil': '🇧🇷 Brazil',
-    'en:argentina': '🇦🇷 Argentina',
-    'en:colombia': '🇨🇴 Colombia',
-    'en:chile': '🇨🇱 Chile',
-    'en:united-kingdom': '🇬🇧 United Kingdom',
-    'en:italy': '🇮🇹 Italy',
-    'en:japan': '🇯🇵 Japan',
-    'en:china': '🇨🇳 China',
-    'en:india': '🇮🇳 India',
+# ── Country list (OFF tag → i18n key) ─────────────────────────────────────────
+_COUNTRY_KEYS = {
+    '': 'country_unspecified',
+    'en:mexico': 'country_mx',
+    'en:united-states': 'country_us',
+    'en:canada': 'country_ca',
+    'en:france': 'country_fr',
+    'en:spain': 'country_es',
+    'en:germany': 'country_de',
+    'en:brazil': 'country_br',
+    'en:argentina': 'country_ar',
+    'en:colombia': 'country_co',
+    'en:chile': 'country_cl',
+    'en:united-kingdom': 'country_gb',
+    'en:italy': 'country_it',
+    'en:japan': 'country_jp',
+    'en:china': 'country_cn',
+    'en:india': 'country_in',
 }
 
 # ── Full nutrient catalog: OFF POST key → (display label, unit) ───────────────
@@ -169,34 +169,114 @@ def _classify_lines(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
     return ingr, nutr, other
 
 
+def _parse_nutrition_text(text: str) -> dict:
+    """Returns {off_key: value_str} from raw OCR nutrition text."""
+    result = {}
+    for line in text.lower().split('\n'):
+        numbers = re.findall(r'\d+(?:[.,]\d+)?', line)
+        if not numbers:
+            continue
+        val = numbers[0].replace(',', '.')
+        for key, keywords in _NUTRIENT_KEYWORDS.items():
+            if key in result:
+                continue
+            if any(kw in line for kw in keywords):
+                result[key] = val
+                break
+    return result
+
+
+@st.cache_resource(show_spinner=False)
+def _get_ocr_reader():
+    return _easyocr.Reader(['es', 'en'], gpu=False)
+
+
 def _run_ocr_bytes(img_bytes: bytes) -> str:
     pil_img = _Image.open(io.BytesIO(img_bytes)).convert('RGB')
-    reader = _easyocr.Reader(['es', 'en'], gpu=False)
-    return '\n'.join(reader.readtext(_np.array(pil_img), detail=0))
+    return '\n'.join(_get_ocr_reader().readtext(_np.array(pil_img), detail=0))
 
 
 def _image_capture(key: str) -> bytes | None:
-    """Radio toggle: camera/upload only when user explicitly activates.
-    Returns image bytes or None."""
-    _is_es = st.session_state.get('lang', 'en') == 'es'
-    opt_cam = '📷 Cámara' if _is_es else '📷 Camera'
-    opt_up  = '📁 Subir imagen' if _is_es else '📁 Upload image'
-    method = st.radio('', [opt_cam, opt_up], horizontal=True, key=f'method_{key}',
-                      label_visibility='collapsed')
-
+    """Camera/upload chooser. Camera only turns on when the user asks. Returns bytes or None."""
+    opt_cam, opt_up = t('contribute_cam_opt'), t('contribute_up_opt')
+    method = st.radio(t('contribute_image_source'), [opt_cam, opt_up], horizontal=True,
+                      key=f'method_{key}', label_visibility='collapsed')
     if method == opt_cam:
-        if st.button('Activar cámara / Open Camera', key=f'btn_cam_{key}', use_container_width=True):
+        if st.button(t('contribute_open_camera'), key=f'btn_cam_{key}', width='stretch'):
             st.session_state[f'cam_active_{key}'] = True
         if st.session_state.get(f'cam_active_{key}'):
-            img = st.camera_input('', key=f'cam_{key}', label_visibility='collapsed')
+            img = st.camera_input(t('contribute_camera_label'), key=f'cam_{key}',
+                                  label_visibility='collapsed')
             return img.getvalue() if img else None
-    else:
-        img = st.file_uploader('', type=['jpg', 'jpeg', 'png', 'webp'],
-                               key=f'up_{key}', label_visibility='collapsed')
-        return img.read() if img else None
+        return None
+    img = st.file_uploader(t('contribute_upload_label'), type=['jpg', 'jpeg', 'png', 'webp'],
+                           key=f'up_{key}', label_visibility='collapsed')
+    return img.getvalue() if img else None
 
 
-# ── Back button ───────────────────────────────────────────────────────────────
+def _ocr_block(key: str, state_key: str) -> str | None:
+    """Image capture + OCR button. Stores raw text in session_state[state_key]."""
+    img = _image_capture(key)
+    if img and _easyocr_ok and _img_ok:
+        if st.button(t('contribute_ocr_run'), key=f'btn_ocr_{key}'):
+            with st.spinner(t('contribute_ocr_running')):
+                try:
+                    st.session_state[state_key] = _run_ocr_bytes(img)
+                except Exception as e:
+                    st.error(str(e))
+    elif img:
+        st.info(t('contribute_ocr_missing'))
+    return st.session_state.get(state_key)
+
+
+# ── Callbacks (run before widgets are instantiated, so they may set widget keys) ─
+def _apply_ingredients(src_key: str) -> None:
+    st.session_state['c_ingredients'] = st.session_state.get(src_key, '')
+
+
+def _translate_ingredients() -> None:
+    st.session_state.pop('c_translated_view', None)
+    try:
+        from deep_translator import GoogleTranslator
+        st.session_state['c_translated'] = GoogleTranslator(
+            source='auto', target='en').translate(st.session_state.get('c_ingredients', ''))
+        st.session_state.pop('c_translate_err', None)
+    except Exception as e:
+        st.session_state['c_translate_err'] = str(e)
+
+
+def _parse_nutrition(src_key: str) -> None:
+    parsed = _parse_nutrition_text(st.session_state.get(src_key, ''))
+    st.session_state['c_parse_n'] = len(parsed)
+    for k, v in parsed.items():
+        try:
+            st.session_state[f'nutr_{k}'] = float(v)
+        except ValueError:
+            continue
+        if k not in st.session_state['active_nutrition_keys']:
+            st.session_state['active_nutrition_keys'].append(k)
+
+
+def _add_nutrient() -> None:
+    k = st.session_state.get('nutrient_to_add')
+    if k and k not in st.session_state['active_nutrition_keys']:
+        st.session_state['active_nutrition_keys'].append(k)
+
+
+_FORM_KEYS = ('c_barcode', 'c_name', 'c_brand', 'c_quantity', 'c_ingredients', 'c_country',
+              'c_translated', 'c_translate_err', 'c_parse_n', 'ocr_ingredients_text',
+              'ocr_nutrition_text', 'ocr_ingr_edit', 'ocr_nutr_edit', 'active_nutrition_keys',
+              'contribute_prefill_barcode', 'contribute_prefill_name', '_c_prefill_sig',
+              'cam_active_ingr', 'cam_active_nutr', 'cam_active_photo',
+              'up_ingr', 'up_nutr', 'up_photo', 'cam_ingr', 'cam_nutr', 'cam_photo')
+
+# Clear everything after a successful submit (must happen before widgets exist).
+if st.session_state.pop('_c_clear', False):
+    for k in list(st.session_state.keys()):
+        if k in _FORM_KEYS or str(k).startswith('nutr_'):
+            del st.session_state[k]
+
+# ── Back button / header ──────────────────────────────────────────────────────
 if st.button(t('back')):
     st.switch_page('app.py')
 
@@ -204,285 +284,149 @@ st.title(t('contribute_title'))
 st.caption(t('contribute_subtitle'))
 st.info(t('contribute_note'))
 
+_last = st.session_state.get('_c_last_result')
+if _last:
+    st.success(t('contribute_success'))
+    if _last.get('url'):
+        st.markdown(f"[{t('contribute_view_product')}]({_last['url']})")
+    if _last.get('photo_ok') is True:
+        st.success(t('contribute_photo_ok'))
+    elif _last.get('photo_ok') is False:
+        st.warning(t('contribute_photo_fail'))
+    st.balloons()
+    st.session_state.pop('_c_last_result', None)
+
+# ── Initial state (prefill from search context; kept until successful submit) ─
+st.session_state.setdefault('active_nutrition_keys', [])
+_pb = st.session_state.get('contribute_prefill_barcode', '')
+_pn = st.session_state.get('contribute_prefill_name', '')
+if (_pb or _pn) and st.session_state.get('_c_prefill_sig') != (_pb, _pn):
+    st.session_state['c_barcode'] = _pb
+    st.session_state['c_name'] = _pn
+    st.session_state['_c_prefill_sig'] = (_pb, _pn)
+if 'c_country' not in st.session_state:
+    _cc = (st.session_state['settings'].get('countries') or {}).get('cc') \
+        if isinstance(st.session_state['settings'].get('countries'), dict) else None
+    st.session_state['c_country'] = 'en:mexico' if _cc == 'mx' else ''
+
+# ── Step 1: barcode & name ────────────────────────────────────────────────────
+st.header(t('contribute_step1'))
+st.text_input(t('contribute_barcode'), key='c_barcode',
+              help=t('contribute_barcode_help'), placeholder=t('contribute_barcode_ph'))
+st.text_input(t('contribute_name'), key='c_name', placeholder=t('contribute_name_ph'))
+col_b, col_q = st.columns(2)
+with col_b:
+    st.text_input(t('contribute_brand'), key='c_brand', placeholder=t('contribute_brand_ph'))
+with col_q:
+    st.text_input(t('contribute_quantity'), key='c_quantity', placeholder=t('contribute_quantity_ph'))
+st.selectbox(
+    t('contribute_country'),
+    options=list(_COUNTRY_KEYS.keys()),
+    format_func=lambda tag: t(_COUNTRY_KEYS[tag]),
+    help=t('contribute_country_help'),
+    key='c_country',
+)
+
 st.divider()
 
-# ── Pre-fill from search context ──────────────────────────────────────────────
-prefill_barcode = st.session_state.pop('contribute_prefill_barcode', '')
-prefill_name = st.session_state.pop('contribute_prefill_name', '')
-
-_cs = st.session_state.get('country_selection', {})
-_cc = _cs.get('cc') if isinstance(_cs, dict) else None
-_default_country = 'en:mexico' if _cc == 'mx' else ''
-
-if 'active_nutrition_keys' not in st.session_state:
-    st.session_state['active_nutrition_keys'] = []
-
-_product_photo_bytes = None
-
-# ── OCR section — tabs ────────────────────────────────────────────────────────
-_ocr_miss_msg = 'EasyOCR no disponible. Instala con: pip install easyocr pillow numpy'
-
-tab_single, tab_ingr, tab_nutr = st.tabs([
-    t('contribute_ocr_single_title'),
-    t('contribute_ocr_ingredients_title'),
-    t('contribute_ocr_nutrition_title'),
-])
-
-# ───────────────────────── TAB 1: Foto única ─────────────────────────────────
-with tab_single:
-    st.caption(t('contribute_ocr_single_caption'))
-    _single_img = _image_capture('single')
-
-    if _single_img and _easyocr_ok and _img_ok:
-        if st.button(t('contribute_ocr_run'), key='btn_ocr_single'):
-            with st.spinner(t('contribute_ocr_running')):
-                try:
-                    raw = _run_ocr_bytes(_single_img)
-                    st.session_state['single_ocr_raw'] = raw
-                    # Clear previous split results
-                    st.session_state.pop('single_ocr_ingr', None)
-                    st.session_state.pop('single_ocr_nutr', None)
-                    st.session_state.pop('single_ocr_other', None)
-                except Exception as e:
-                    st.error(str(e))
-    elif _single_img and not (_easyocr_ok and _img_ok):
-        st.info(_ocr_miss_msg)
-
-    if st.session_state.get('single_ocr_raw'):
-        raw_text = st.text_area(
-            t('contribute_ocr_edit_label'),
-            value=st.session_state['single_ocr_raw'],
-            height=140,
-            key='single_raw_edit',
-        )
-        if st.button(t('contribute_ocr_autosplit'), key='btn_autosplit'):
-            ingr_lines, nutr_lines, other_lines = _classify_lines(raw_text.split('\n'))
-            st.session_state['single_ocr_ingr'] = '\n'.join(ingr_lines)
-            st.session_state['single_ocr_nutr'] = '\n'.join(nutr_lines)
-            st.session_state['single_ocr_other'] = '\n'.join(other_lines)
-            st.rerun()
-
-    if st.session_state.get('single_ocr_ingr') is not None or st.session_state.get('single_ocr_nutr') is not None:
-        st.divider()
-        col_left, col_right = st.columns(2)
-
-        with col_left:
-            st.markdown(f"**{t('contribute_ocr_detected_ingr')}**")
-            edited_single_ingr = st.text_area(
-                t('contribute_ocr_detected_ingr'),
-                value=st.session_state.get('single_ocr_ingr', ''),
-                height=160,
-                label_visibility='collapsed',
-                key='single_ingr_edit',
-            )
-            if st.button(t('contribute_ocr_apply_ingr'), key='btn_apply_single_ingr'):
-                st.session_state['prefill_ingredients'] = edited_single_ingr
-                st.rerun()
-
-        with col_right:
-            st.markdown(f"**{t('contribute_ocr_detected_nutr')}**")
-            edited_single_nutr = st.text_area(
-                t('contribute_ocr_detected_nutr'),
-                value=st.session_state.get('single_ocr_nutr', ''),
-                height=160,
-                label_visibility='collapsed',
-                key='single_nutr_edit',
-            )
-            if st.button(t('contribute_ocr_parse'), key='btn_parse_single_nutr'):
-                parsed = _parse_nutrition_text(edited_single_nutr)
-                if parsed:
-                    st.session_state['ocr_nutrition_values'] = parsed
-                    existing = set(st.session_state['active_nutrition_keys'])
-                    for k in parsed:
-                        if k not in existing:
-                            st.session_state['active_nutrition_keys'].append(k)
-                    st.success(t('contribute_ocr_parsed_ok', n=len(parsed)))
-                else:
-                    st.warning(t('contribute_ocr_parsed_none'))
-                st.rerun()
-
-        _other = st.session_state.get('single_ocr_other', '')
-        if _other.strip():
-            with st.expander(t('contribute_ocr_unclassified')):
-                st.text(_other)
-
-# ───────────────────────── TAB 2: Solo ingredientes ──────────────────────────
-with tab_ingr:
+# ── Step 2: ingredients ───────────────────────────────────────────────────────
+st.header(t('contribute_step2'))
+with st.expander(t('contribute_ocr_optional')):
     st.caption(t('contribute_ocr_ingredients_caption'))
-    _ingr_img = _image_capture('ingr')
+    _raw = _ocr_block('ingr', 'ocr_ingredients_text')
+    if _raw:
+        st.text_area(t('contribute_ocr_edit_label'), value=_raw, height=120, key='ocr_ingr_edit')
+        st.button(t('contribute_ocr_apply_ingr'), key='btn_apply_ingr',
+                  on_click=_apply_ingredients, args=('ocr_ingr_edit',))
 
-    if _ingr_img and _easyocr_ok and _img_ok:
-        if st.button(t('contribute_ocr_run'), key='btn_ocr_ingr'):
-            with st.spinner(t('contribute_ocr_running')):
-                try:
-                    raw = _run_ocr_bytes(_ingr_img)
-                    st.session_state['ocr_ingredients_text'] = raw
-                except Exception as e:
-                    st.error(str(e))
-    elif _ingr_img and not (_easyocr_ok and _img_ok):
-        st.info(_ocr_miss_msg)
+st.text_area(t('contribute_ingredients'), key='c_ingredients',
+             placeholder=t('contribute_ingredients_ph'), height=120)
 
-    if st.session_state.get('ocr_ingredients_text'):
-        edited_ingr = st.text_area(
-            t('contribute_ocr_edit_label'),
-            value=st.session_state['ocr_ingredients_text'],
-            height=120,
-            key='ocr_ingr_edit',
-        )
-        if st.button(t('contribute_ocr_apply_ingr'), key='btn_apply_ingr'):
-            st.session_state['prefill_ingredients'] = edited_ingr
-            st.rerun()
-
-# ───────────────────────── TAB 3: Solo nutrición ─────────────────────────────
-with tab_nutr:
-    st.caption(t('contribute_ocr_nutrition_caption'))
-    _nutr_img = _image_capture('nutr')
-
-    if _nutr_img and _easyocr_ok and _img_ok:
-        if st.button(t('contribute_ocr_run'), key='btn_ocr_nutr'):
-            with st.spinner(t('contribute_ocr_running')):
-                try:
-                    raw = _run_ocr_bytes(_nutr_img)
-                    st.session_state['ocr_nutrition_text'] = raw
-                except Exception as e:
-                    st.error(str(e))
-    elif _nutr_img and not (_easyocr_ok and _img_ok):
-        st.info(_ocr_miss_msg)
-
-    if st.session_state.get('ocr_nutrition_text'):
-        edited_nutr = st.text_area(
-            t('contribute_ocr_edit_label'),
-            value=st.session_state['ocr_nutrition_text'],
-            height=140,
-            key='ocr_nutr_edit',
-        )
-        if st.button(t('contribute_ocr_parse'), key='btn_parse_nutr'):
-            parsed = _parse_nutrition_text(edited_nutr)
-            if parsed:
-                st.session_state['ocr_nutrition_values'] = parsed
-                existing = set(st.session_state['active_nutrition_keys'])
-                for k in parsed:
-                    if k not in existing:
-                        st.session_state['active_nutrition_keys'].append(k)
-                st.success(t('contribute_ocr_parsed_ok', n=len(parsed)))
-            else:
-                st.warning(t('contribute_ocr_parsed_none'))
-            st.rerun()
+if st.session_state.get('c_ingredients', '').strip():
+    st.button(t('translate_to_english'), key='btn_translate', on_click=_translate_ingredients,
+              help=t('contribute_translate_hint'))
+    if st.session_state.get('c_translate_err'):
+        st.error(st.session_state['c_translate_err'])
+    if st.session_state.get('c_translated'):
+        st.info(t('translated_label'))
+        st.text_area(t('translated_ingredients_label'), value=st.session_state['c_translated'],
+                     height=100, key='c_translated_view')
+        st.button(t('contribute_ocr_use_translated'), key='btn_use_translated',
+                  on_click=_apply_ingredients, args=('c_translated_view',))
 
 st.divider()
 
-# ── "Add nutrient" button (outside form) ──────────────────────────────────────
-_ocr_nutrition = st.session_state.get('ocr_nutrition_values', {})
+# ── Step 3: nutrition ─────────────────────────────────────────────────────────
+st.header(t('contribute_step3'))
+with st.expander(t('contribute_ocr_optional')):
+    st.caption(t('contribute_ocr_nutrition_caption'))
+    _raw = _ocr_block('nutr', 'ocr_nutrition_text')
+    if _raw:
+        st.text_area(t('contribute_ocr_edit_label'), value=_raw, height=140, key='ocr_nutr_edit')
+        st.button(t('contribute_ocr_parse'), key='btn_parse_nutr',
+                  on_click=_parse_nutrition, args=('ocr_nutr_edit',))
+    _n = st.session_state.get('c_parse_n')
+    if _n is not None:
+        if _n:
+            st.success(t('contribute_ocr_parsed_ok', n=_n))
+        else:
+            st.warning(t('contribute_ocr_parsed_none'))
+
 _active_keys: list = st.session_state['active_nutrition_keys']
 _available_to_add = [k for k in _ALL_NUTRIENTS if k not in _active_keys]
-
 if _available_to_add:
-    col_add1, col_add2 = st.columns([3, 1])
+    col_add1, col_add2 = st.columns([3, 1], vertical_alignment='bottom')
     with col_add1:
-        _add_label = 'Agregar nutriente' if st.session_state.get('lang', 'en') == 'es' else 'Add nutrient'
-        _to_add = st.selectbox(
-            f'➕ {_add_label}',
-            options=_available_to_add,
-            format_func=lambda k: _ALL_NUTRIENTS[k][0],
-            key='nutrient_to_add',
-        )
+        st.selectbox(f"➕ {t('contribute_add_nutrient')}", options=_available_to_add,
+                     format_func=lambda k: _ALL_NUTRIENTS[k][0], key='nutrient_to_add')
     with col_add2:
-        st.write('')
-        st.write('')
-        if st.button('Agregar / Add', key='btn_add_nutrient'):
-            if _to_add and _to_add not in _active_keys:
-                st.session_state['active_nutrition_keys'].append(_to_add)
-            st.rerun()
+        st.button(t('contribute_add_btn'), key='btn_add_nutrient', on_click=_add_nutrient)
 
-# ── Main form ─────────────────────────────────────────────────────────────────
-_prefill_ingr = st.session_state.get('prefill_ingredients', '')
+nutrition_values = {}
+if _active_keys:
+    st.caption(t('contribute_nutrition_help'))
+    cols = st.columns(2)
+    for idx, key in enumerate(_active_keys):
+        label, unit = _ALL_NUTRIENTS.get(key, (key, ''))
+        with cols[idx % 2]:
+            val = st.number_input(label, min_value=0.0, value=None, step=0.1,
+                                  format='%.2f', key=f'nutr_{key}', placeholder=unit)
+            if val is not None:   # keep legitimate zeros
+                nutrition_values[key] = val
+else:
+    st.caption(f"💡 {t('contribute_nutrient_hint')}")
 
-with st.form('contribute_form'):
-    barcode = st.text_input(
-        t('contribute_barcode'),
-        value=prefill_barcode,
-        help=t('contribute_barcode_help'),
-        placeholder='e.g. 7501234567890',
-    )
-    name = st.text_input(
-        t('contribute_name'),
-        value=prefill_name,
-        placeholder='e.g. Oat Milk Chocolate',
-    )
-    brand = st.text_input(t('contribute_brand'), placeholder='e.g. Alpro')
-    quantity = st.text_input(t('contribute_quantity'), placeholder='e.g. 500ml')
+st.divider()
 
-    ingredients = st.text_area(
-        t('contribute_ingredients'),
-        value=_prefill_ingr,
-        placeholder='e.g. Oat base (water, oats 10%), cocoa 2%, salt...',
-        height=120,
-    )
+# ── Step 4: photo & submit ────────────────────────────────────────────────────
+st.header(t('contribute_step4'))
+st.caption(t('contribute_front_photo'))
+_product_photo_bytes = _image_capture('photo')
+if _product_photo_bytes:
+    st.image(_product_photo_bytes, width=200)
 
-    _country_options = list(_COUNTRIES.keys())
-    _country_labels = list(_COUNTRIES.values())
-    _default_idx = _country_options.index(_default_country) if _default_country in _country_options else 0
-    country_idx = st.selectbox(
-        t('contribute_country'),
-        options=range(len(_country_options)),
-        format_func=lambda i: _country_labels[i],
-        index=_default_idx,
-        help=t('contribute_country_help'),
-    )
-    country_tag = _country_options[country_idx]
-
-    nutrition_values = {}
-    if _active_keys:
-        with st.expander(t('contribute_nutrition_expander'), expanded=True):
-            st.caption(t('contribute_nutrition_help'))
-            cols = st.columns(2)
-            for idx, key in enumerate(_active_keys):
-                label, unit = _ALL_NUTRIENTS.get(key, (key, ''))
-                prefill_val = float(_ocr_nutrition[key]) if key in _ocr_nutrition else None
-                with cols[idx % 2]:
-                    val = st.number_input(
-                        label,
-                        min_value=0.0,
-                        value=prefill_val,
-                        step=0.1,
-                        format='%.2f',
-                        key=f'nutr_{key}',
-                        placeholder=unit,
-                    )
-                    if val is not None and val > 0:
-                        nutrition_values[key] = val
-    else:
-        _hint = ('Usa los botones de OCR arriba o el selector "Agregar nutriente" para añadir campos.'
-                 if st.session_state.get('lang', 'en') == 'es'
-                 else 'Use the OCR buttons above or the "Add nutrient" selector to add fields.')
-        st.caption(f'💡 {_hint}')
-
-    st.divider()
-    submitted = st.form_submit_button(t('contribute_submit'), type='primary')
-
-if submitted:
-    if not barcode.strip() or not name.strip():
+if st.button(t('contribute_submit'), type='primary', key='btn_submit'):
+    barcode = st.session_state.get('c_barcode', '').strip()
+    name = st.session_state.get('c_name', '').strip()
+    if not barcode or not name:
         st.error(t('contribute_required'))
-    elif not barcode.strip().isdigit() or not (8 <= len(barcode.strip()) <= 14):
-        st.error('❌ Barcode must be 8-14 digits (EAN/UPC format)')
+    elif not barcode.isdigit() or not (8 <= len(barcode) <= 14):
+        st.error(t('contribute_barcode_invalid'))
     else:
         with st.spinner(t('contribute_submitting')):
             result = submit_product(
                 barcode=barcode,
                 name=name,
-                brand=brand,
-                quantity=quantity,
-                ingredients=ingredients,
-                countries=country_tag,
-                nutrition=nutrition_values if nutrition_values else None,
+                brand=st.session_state.get('c_brand', ''),
+                quantity=st.session_state.get('c_quantity', ''),
+                ingredients=st.session_state.get('c_ingredients', ''),
+                countries=st.session_state.get('c_country', ''),
+                nutrition=nutrition_values or None,
                 photo_bytes=_product_photo_bytes,
             )
-        if result['ok']:
-            st.success(t('contribute_success'))
-            st.balloons()
-            for k in ('ocr_ingredients_text', 'ocr_nutrition_text', 'ocr_nutrition_values',
-                      'prefill_ingredients', 'active_nutrition_keys',
-                      'single_ocr_raw', 'single_ocr_ingr', 'single_ocr_nutr', 'single_ocr_other'):
-                st.session_state.pop(k, None)
+        if result.get('ok'):
+            st.session_state['_c_last_result'] = result
+            st.session_state['_c_clear'] = True
+            st.rerun()
         else:
-            st.error(t('contribute_failed', err=result['error']))
+            st.error(t('contribute_failed', err=result.get('error') or '?'))
