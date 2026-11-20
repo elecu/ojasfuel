@@ -22,6 +22,7 @@ _SNAPSHOT_KEYS = (
     'labels', 'categories', 'categories_tags', 'quantity', 'serving_size',
     'nutriscore', 'countries_tags', '_off_tags', '_source', '_smae_portion_g',
     '_smae_group', '_smae_subgroup', '_per_portion',
+    '_ingredients_tags_text', '_ingr_parsed_n', '_ingr_unknown_n', 'allergens_tags', 'traces_tags',
 )
 
 

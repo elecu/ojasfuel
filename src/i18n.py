@@ -463,6 +463,8 @@ _EN = {
     'change_country': 'Shopping in',
     'country_changed': 'Now showing products from {country}',
     'country_switch_help': 'Travelling? Change the country here; recent ones stay at the top.',
+    'verdict_ingredients_unverified': "We couldn't verify the ingredient list (unreadable or incomplete): check the label",
+    'alternatives_load_failed': "Couldn't load alternatives (connection to Open Food Facts is slow).",
 }
 
 _ES = {
@@ -922,6 +924,8 @@ _ES = {
     'change_country': 'Comprando en',
     'country_changed': 'Ahora se muestran productos de {country}',
     'country_switch_help': '¿Viajas? Cambia el país aquí; los recientes quedan arriba.',
+    'verdict_ingredients_unverified': 'No pudimos verificar la lista de ingredientes (ilegible o incompleta): revisa la etiqueta',
+    'alternatives_load_failed': 'No se pudieron cargar alternativas (la conexión con Open Food Facts está lenta).',
 }
 
 _TRANSLATIONS = {'en': _EN, 'es': _ES}

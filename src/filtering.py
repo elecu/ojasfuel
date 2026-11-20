@@ -7,13 +7,43 @@ _classifier = ProductClassifier()
 _ALLERGY_KIND = 'allergy'
 
 
+def classification_text(product: dict) -> str:
+    """Label text plus OFF's normalised ingredient tags (more coverage: tags are
+    canonical English even when the label is in a language we have no
+    blocklist for)."""
+    text = product.get('ingredients', '') or ''
+    tags_text = product.get('_ingredients_tags_text') or ''
+    if tags_text and tags_text not in text:
+        text = f'{text}, {tags_text}' if text else tags_text
+    return text
+
+
+def ingredients_verifiable(product: dict) -> bool:
+    """Could OFF actually parse this ingredient list?
+
+    Garbage OCR text or a nutrition table pasted as ingredients still "has
+    ingredients", but matching allergens against it proves nothing.
+    """
+    if product.get('_source') == 'smae':
+        return True
+    if not (product.get('ingredients') or '').strip():
+        return False
+    parsed = product.get('_ingr_parsed_n')
+    unknown = product.get('_ingr_unknown_n') or 0
+    if not product.get('_ingredients_tags_text') and not parsed:
+        return False  # never parsed by OFF
+    if parsed:
+        return unknown / max(parsed, 1) <= 0.3
+    return True
+
+
 def resolve_diet(product: dict, settings: dict) -> dict:
     """Resolve vegan/vegetarian status. Priority: OFF/SMAE tags > regex classifier.
 
     Returns {'is_vegan', 'is_vegetarian', 'source': 'off'|'smae'|'ingredients'|'none',
              'classification': <classifier result>}.
     """
-    cl = _classifier.classify(product.get('ingredients', '') or '', settings or {},
+    cl = _classifier.classify(classification_text(product), settings or {},
                               product_name=product.get('name', ''))
     tags = product.get('_off_tags') or {}
     t_vegan, t_veg = tags.get('is_vegan'), tags.get('is_vegetarian')

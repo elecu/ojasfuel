@@ -332,6 +332,11 @@ ALLERGIES_GLUTEN = [
     r'\bbarley malt\b', r'\bbarley extract\b',
     r'\brye flour\b', r'\boat flour\b',
     r'\bCeliac\b', r'\bCoeliac\b',
+    # Unspecified flour is usually wheat (esp. "harina" on Mexican labels);
+    # naturally gluten-free flours are excluded by the lookbehind/lookahead.
+    r'(?<!corn )(?<!rice )(?<!almond )(?<!coconut )(?<!chickpea )(?<!soy )(?<!soya )(?<!potato )(?<!cassava )(?<!tapioca )(?<!buckwheat )(?<!quinoa )(?<!maize )\bflours?\b',
+    r'\bharinas?\b(?!\s+(?:de\s+)?(?:ma[ií]z|arroz|coco|almendras?|garbanzo|soya|soja|papa|yuca|tapioca|quinoa|nixtamalizada))',
+    r'\bsemolina\b', r'\bs[eé]mola\b', r'\bmalt\b', r'\bmalta\b', r'\bcouscous\b', r'\bseitan\b',
     # Spanish
     r'\bgluten\b', r'\btrigo\b', r'\bcebada\b',
     r'\bcenteno\b', r'\bavena\b',

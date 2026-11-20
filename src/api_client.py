@@ -150,6 +150,30 @@ def _brands_str(b) -> str:
     return b or ''
 
 
+def _raw_ingredients_text(raw: dict) -> str:
+    return (raw.get('ingredients_text') or raw.get('ingredients_text_en')
+            or raw.get('ingredients_text_es') or '')
+
+
+def _tags_to_text(tags) -> str:
+    """['en:wheat-flour', 'en:sugar'] → 'wheat flour, sugar' (canonical English)."""
+    words = []
+    for t in tags or []:
+        w = str(t).split(':', 1)[-1].replace('-', ' ').strip()
+        if w and w not in words:
+            words.append(w)
+    return ', '.join(words)
+
+
+def _ingredients_text(raw: dict) -> str:
+    """Real ingredient text, else OFF's normalised ingredient tags.
+
+    The search API returns no ingredient text but does return ingredients_tags,
+    which lets lists and alternatives check allergies without a slow lookup.
+    """
+    return _raw_ingredients_text(raw) or _tags_to_text(raw.get('ingredients_tags'))
+
+
 def format_product(raw: dict) -> dict:
     """Normalise a raw OFF product dict into the app's standard format."""
     product_id = raw.get('code') or raw.get('id') or 'N/A'
@@ -157,8 +181,15 @@ def format_product(raw: dict) -> dict:
         'id': product_id,
         'name': raw.get('product_name') or raw.get('product_name_en') or raw.get('product_name_es') or 'Unknown',
         'brand': _brands_str(raw.get('brands', '')),
-        'ingredients': (raw.get('ingredients_text') or raw.get('ingredients_text_en')
-                        or raw.get('ingredients_text_es') or ''),
+        'ingredients': _ingredients_text(raw),
+        '_ingredients_from_tags': not _raw_ingredients_text(raw) and bool(raw.get('ingredients_tags')),
+        # OFF's normalised ingredients (canonical English) — classified together
+        # with the label text — and how well OFF could parse the list
+        '_ingredients_tags_text': _tags_to_text(raw.get('ingredients_tags')),
+        '_ingr_parsed_n': raw.get('ingredients_n'),
+        '_ingr_unknown_n': raw.get('unknown_ingredients_n'),
+        'allergens_tags': list(raw.get('allergens_tags') or []),
+        'traces_tags': list(raw.get('traces_tags') or []),
         'image_url': raw.get('image_url') or raw.get('image_front_url', ''),
         'url': f'https://world.openfoodfacts.org/product/{product_id}',
         'nutrition': extract_nutrition(raw.get('nutriments', {})),
@@ -179,6 +210,8 @@ _SEARCH_FIELDS = ','.join([
     'code', 'product_name', 'brands', 'quantity', 'serving_size', 'labels',
     'ingredients_text', 'nutriments', 'ingredients_analysis_tags',
     'categories_tags', 'countries_tags', 'image_url', 'nutriscore_grade',
+    'ingredients_tags', 'allergens_tags', 'traces_tags',
+    'ingredients_n', 'unknown_ingredients_n',
 ])
 
 
@@ -209,7 +242,9 @@ def _parse_off_tags(tags: list[str]) -> dict:
 def _format_search_hit(hit: dict) -> dict:
     """Format a product from search.openfoodfacts.org /search response."""
     product = format_product(hit)
-    product['_needs_full_load'] = not bool(product['ingredients'])
+    # tag-derived ingredients are enough to classify, but the detail page
+    # should still load the real label text
+    product['_needs_full_load'] = not _raw_ingredients_text(hit)
     return product
 
 
@@ -251,6 +286,62 @@ def search_by_name(query: str, page_size: int = 20, country_code: str | None = N
         last_error = e
 
     raise RuntimeError(f"Search failed (both endpoints unavailable): {last_error}")
+
+
+def _quote_tag(tag: str) -> str:
+    return '"' + str(tag).replace('\\', '').replace('"', '') + '"'
+
+
+# settings allergy key → OFF allergens_tags values
+ALLERGEN_TAGS = {
+    'allergies_nuts': ['en:nuts'],
+    'allergies_peanuts': ['en:peanuts'],
+    'allergies_soy': ['en:soybeans'],
+    'allergies_mustard': ['en:mustard'],
+    'allergies_sesame': ['en:sesame-seeds'],
+    'allergies_gluten': ['en:gluten'],
+}
+
+
+def build_filter_query(category_tag: str, country_tags: list | None = None,
+                       diet_tag: str | None = None, exclude_allergens: list | None = None) -> str:
+    """Lucene-style query for search.openfoodfacts.org exact-tag filtering.
+
+    e.g. categories_tags:"en:cocoa-and-hazelnuts-spreads"
+         AND (countries_tags:"en:mexico") AND ingredients_analysis_tags:"en:vegan"
+    """
+    parts = [f'categories_tags:{_quote_tag(category_tag)}']
+    if country_tags:
+        parts.append('(' + ' OR '.join(f'countries_tags:{_quote_tag(c)}' for c in country_tags) + ')')
+    if diet_tag:
+        parts.append(f'ingredients_analysis_tags:{_quote_tag(diet_tag)}')
+    q = ' AND '.join(parts)
+    for a in exclude_allergens or []:
+        q += f' AND NOT allergens_tags:{_quote_tag(a)} AND NOT traces_tags:{_quote_tag(a)}'
+    return q
+
+
+def search_filtered(category_tag: str, country_tags: list | None = None,
+                    diet_tag: str | None = None, page_size: int = 30,
+                    exclude_allergens: list | None = None, timeout: float = 8,
+                    attempts: int = 2) -> list[dict]:
+    """Products in an exact OFF category (optionally country/diet-filtered).
+
+    Unlike search_by_name (free text), every hit really belongs to the category.
+    Raises OFFConnectionError on network failure.
+    """
+    params = {'q': build_filter_query(category_tag, country_tags, diet_tag, exclude_allergens),
+              'page_size': page_size, 'fields': _SEARCH_FIELDS}
+    last_error = None
+    for _ in range(max(1, attempts)):
+        try:
+            resp = requests.get('https://search.openfoodfacts.org/search', params=params,
+                                headers=_SEARCH_HEADERS, timeout=timeout)
+            resp.raise_for_status()
+            return [_format_search_hit(h) for h in (resp.json().get('hits') or [])]
+        except Exception as e:  # noqa: BLE001 — retried once, then surfaced
+            last_error = e
+    raise OFFConnectionError(f'Filtered search failed: {last_error}')
 
 
 class OFFConnectionError(Exception):

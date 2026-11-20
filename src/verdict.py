@@ -1,6 +1,6 @@
 """Single suitability verdict (ok / no / unknown) for a product and user settings."""
 
-from src.filtering import resolve_diet
+from src.filtering import resolve_diet, ingredients_verifiable
 
 _RESTRICTION_KEYS = (
     'no_alcohol', 'no_caffeine', 'no_mushrooms', 'no_onion', 'no_garlic',
@@ -28,6 +28,31 @@ def _add_unique(lst: list, items) -> None:
             low.add(it.lower())
 
 
+def _declared_allergen_reasons(product: dict, settings: dict, existing: list) -> list[dict]:
+    """Allergens the manufacturer declared to OFF (allergens_tags / traces_tags).
+
+    Catches allergens the ingredient regex misses and works for search hits
+    that only carry tags. Traces ("may contain") count: for allergies, safe > sorry.
+    """
+    from src.api_client import ALLERGEN_TAGS
+    allergens = set(product.get('allergens_tags') or [])
+    traces = set(product.get('traces_tags') or [])
+    out = []
+    for key, tags in ALLERGEN_TAGS.items():
+        if not settings.get(key):
+            continue
+        name = tags[0].split(':', 1)[-1].replace('-', ' ')
+        if allergens & set(tags):
+            text = f'Declared allergen: {name}'
+        elif traces & set(tags):
+            text = f'May contain traces of {name}'
+        else:
+            continue
+        if not any(text == r['text'] for r in existing + out):
+            out.append({'kind': 'allergy', 'text': text})
+    return out
+
+
 def verdict(product: dict, settings: dict) -> dict:
     settings = settings or {}
     mode = settings.get('mode', 'vegetarian')
@@ -40,11 +65,12 @@ def verdict(product: dict, settings: dict) -> dict:
     reasons: list[dict] = []
     flagged: list[str] = []
 
-    # 1. allergies
+    # 1. allergies (ingredient matches, then OFF-declared allergens / traces)
     for v, k in pairs:
         if k == 'allergy':
             reasons.append({'kind': 'allergy', 'text': v})
             _add_unique(flagged, _terms_from(v))
+    reasons.extend(_declared_allergen_reasons(product, settings, reasons))
 
     # 2. diet
     is_veg, is_vegan = diet['is_vegetarian'], diet['is_vegan']
@@ -107,6 +133,15 @@ def verdict(product: dict, settings: dict) -> dict:
                     reasons.append({'kind': 'no_data',
                                     'text': 'No ingredients: cannot check allergies/restrictions',
                                     'reason_key': 'verdict_no_ingredients'})
+
+    # Safety gate: with allergies/restrictions active, a 'suitable' answer needs
+    # an ingredient list OFF could actually parse (not OCR garbage).
+    if status == 'ok' and any(settings.get(k) for k in _ALLERGY_KEYS + _RESTRICTION_KEYS) \
+            and (product.get('ingredients') or '').strip() and not ingredients_verifiable(product):
+        status = 'unknown'
+        reasons.append({'kind': 'no_data',
+                        'text': 'Ingredient list could not be verified (unreadable or incomplete)',
+                        'reason_key': 'verdict_ingredients_unverified'})
 
     return {'status': status, 'reasons': reasons, 'source': diet['source'],
             'flagged_terms': flagged, 'diet': diet}

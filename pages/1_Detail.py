@@ -132,15 +132,20 @@ if status in ('no', 'unknown') or active == 'similar':
     st.subheader(t('alternatives_title'))
     cache = st.session_state.setdefault('_alts_cache', {})
     ck = f'{pid}|{_settings_sig()}'
-    if ck not in cache:
+    alts, incomplete = cache.get(ck, (None, False))
+    if alts is None:
         with st.spinner(t('finding_alternatives')):
             try:
-                from src.alternatives import find_alternatives
-                cache[ck] = find_alternatives(product, settings, n=3) or []
+                from src.alternatives import find_alternatives_ex
+                alts, incomplete = find_alternatives_ex(product, settings, n=3)
             except Exception:
-                cache[ck] = []
-    alts = cache[ck]
-    if not alts:
+                alts, incomplete = [], True
+        if not incomplete:  # never remember a network failure for the session
+            cache[ck] = (alts, False)
+    if not alts and incomplete:
+        st.caption('⚠️ ' + t('alternatives_load_failed'))
+        st.button(t('retry_search'), key='alts_retry')  # rerun = new attempt
+    elif not alts:
         st.caption(t('no_alternatives'))
     for i, alt in enumerate(alts):
         av = alt.get('_verdict') or compute_verdict(alt, settings)
