@@ -203,16 +203,23 @@ col_info, col_logo = st.columns([3, 1])
 with col_info:
     st.markdown(f"**{t('version')}:** v0.1.1 Beta")
     st.markdown(f"**{t('creator')}:** Edwin Herrera")
-    is_mexico_info = s.get('countries', {}).get('cc') == 'mx'
+    from src.food_tables import table_for_country
+    _cc = s.get('countries', {}).get('cc')
+    is_mexico_info = _cc == 'mx'
+    _own_table = table_for_country(_cc)
     if is_mexico_info:
         st.markdown(f"**{t('data_source')}:** {t('data_source_text_mx')}")
         st.caption(t('disclaimer_mx'))
         st.caption(t('smae_credit'))
         st.caption(t('off_credit'))
+        st.caption(t('usda_credit'))
     else:
         st.markdown(f"**{t('data_source')}:** {t('data_source_text')}")
         st.caption(t('disclaimer'))
         st.caption(t('off_credit'))
+        if _own_table in ('cofid', 'ciqual'):  # the country's official table first
+            st.caption(t(f'{_own_table}_credit'))
+        st.caption(t('usda_credit'))
 
 with col_logo:
     theme = st.session_state.get('theme', 'dark')

@@ -32,7 +32,8 @@ def parse_serving_grams(product: dict) -> tuple[float | None, str]:
         except (TypeError, ValueError):
             pass
 
-    smae_g = product.get('_smae_portion_g')
+    smae_g = (product.get('_smae_portion_g') or product.get('_table_portion_g')
+              or product.get('_usda_portion_g'))
     if smae_g:
         try:
             return float(smae_g), (srv_str or f'{smae_g} g')

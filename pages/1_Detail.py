@@ -58,6 +58,8 @@ if not product:
     st.stop()
 
 is_smae = product.get('_source') == 'smae'
+from src.food_tables import GENERIC_SOURCES
+is_usda = product.get('_source') in GENERIC_SOURCES  # USDA / CoFID / CIQUAL generic table food
 pid = str(product.get('id', ''))
 v = compute_verdict(product, settings)
 status = v.get('status', 'unknown')
@@ -74,7 +76,7 @@ if _seen and _seen.get('id') == pid:
     with c_seen:
         st.caption('🕘 ' + t('seen_on', date=_seen.get('date') or ''))
     with c_ref:
-        if not is_smae and st.button(t('refresh'), key='refresh_btn', width='stretch'):
+        if not (is_smae or is_usda) and st.button(t('refresh'), key='refresh_btn', width='stretch'):
             from src import api_client
             try:
                 fresh = api_client.search_by_barcode(pid)
@@ -176,7 +178,7 @@ if active == 'portion':
     st.session_state['nav_from'] = 'pages/1_Detail.py'
     st.switch_page('pages/2_Portion_Calculator.py')
 
-ingredients = '' if is_smae else (product.get('ingredients', '') or '')
+ingredients = '' if (is_smae or is_usda) else (product.get('ingredients', '') or '')
 flagged = v.get('flagged_terms') or []
 
 if active == 'why':
@@ -247,6 +249,18 @@ with st.expander(t('product_details')):
         if product.get('_smae_subgroup'):
             st.markdown(f"**{t('smae_subgroup')}:** {product['_smae_subgroup']}")
         st.caption(t('smae_values_per_100g'))
+    elif is_usda:
+        st.markdown(f"**{t('table_info')}**")
+        if product.get('_table_category'):
+            _cat = product['_table_category']
+            if product.get('_table_subgroup'):
+                _cat += f" › {product['_table_subgroup']}"
+            st.markdown(f"**{t('table_category')}:** {_cat}")
+        if product.get('serving_size'):
+            st.markdown(f"**{t('table_portion')}:** {product['serving_size']}")
+        st.caption(t(f"table_source_{product['_source']}") + ' · ' + t('smae_values_per_100g'))
+        if product.get('_reference_only'):
+            st.caption('ℹ️ ' + t('table_reference_only'))
     else:
         st.markdown(f"**{t('ingredients')}**")
         if ingredients:

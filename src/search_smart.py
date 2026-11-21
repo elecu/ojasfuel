@@ -5,7 +5,7 @@ import re
 from rapidfuzz import fuzz
 from rapidfuzz.distance import Levenshtein
 
-from src import smae_client
+from src import smae_client, food_tables
 from src.smae_client import _normalize, _load_db, _smae_to_product
 from src.filtering import classify_results
 from src.verdict import verdict
@@ -81,11 +81,17 @@ def suggest(prefix: str, history: list[str], limit: int = 8) -> list[str]:
     return out
 
 
+# Quick chips: everyday foods without a barcode, per country (Mexico keeps
+# its own staples; other countries get theirs instead of tortilla/nopal).
 _COMMON = {
-    'es': ['plátano', 'manzana', 'aguacate', 'frijol', 'tortilla de maíz', 'arroz',
-           'avena', 'queso panela', 'nopal', 'lentejas'],
-    'en': ['banana', 'apple', 'avocado', 'beans', 'corn tortilla', 'rice',
-           'oats', 'panela cheese', 'cactus (nopal)', 'lentils'],
+    ('es', 'mx'): ['plátano', 'manzana', 'aguacate', 'frijol', 'tortilla de maíz', 'arroz',
+                   'avena', 'queso panela', 'nopal', 'lentejas'],
+    ('en', 'mx'): ['banana', 'apple', 'avocado', 'beans', 'corn tortilla', 'rice',
+                   'oats', 'panela cheese', 'cactus (nopal)', 'lentils'],
+    ('es', None): ['plátano', 'manzana', 'patata cocida', 'arroz cocido', 'pasta cocida',
+                   'garbanzos', 'lentejas', 'avena', 'pan integral', 'yogur'],
+    ('en', None): ['banana', 'apple', 'boiled potatoes', 'cooked rice', 'cooked pasta',
+                   'baked beans', 'lentils', 'porridge oats', 'wholemeal bread', 'yogurt'],
 }
 
 
@@ -110,8 +116,12 @@ def smae_alias(query: str) -> str:
     return _SMAE_ALIASES.get((query or '').strip().lower(), query)
 
 
-def common_foods(lang: str) -> list[str]:
-    return list(_COMMON.get((lang or 'en')[:2], _COMMON['en']))
+def common_foods(lang: str, cc: str | None = None) -> list[str]:
+    """Quick-search chips for foods without a barcode, by language and country."""
+    lang = (lang or 'en')[:2]
+    lang = lang if lang in ('es', 'en') else 'en'
+    key = (lang, 'mx' if cc == 'mx' else None)
+    return list(_COMMON[key])
 
 
 # ── Query parsing ─────────────────────────────────────────────────────────────
@@ -168,10 +178,32 @@ def _is_gluten_free(p: dict) -> bool:
     if p.get('_source') == 'smae':
         # SMAE has no ingredient list (only a name hint), so trust the group only
         return p.get('_smae_group') in _SMAE_GLUTEN_FREE_GROUPS
+    if p.get('_source') in food_tables.GENERIC_SOURCES:
+        table = food_tables.get_table(p['_source'])
+        names = f"{(p.get('_raw') or {}).get('n', '')} {(p.get('_raw') or {}).get('nf', '')} " \
+                f"{p.get('name') or ''}".lower()
+        return table.gluten_free(p) and not _find_matches(names, ALLERGIES_GLUTEN)
     ingredients = (p.get('ingredients') or '').lower()
     if not ingredients:
         return False
     return not _find_matches(ingredients, ALLERGIES_GLUTEN)
+
+
+def _add_table(add, source: str, kw: str, cc, reference_only: bool = False) -> int:
+    """Add results of one generic food table; returns how many it found."""
+    try:
+        table = food_tables.get_table(source)
+        found = table.search_by_name(kw, page_size=20, cc=cc)
+        if len(found) < 5:
+            seen = {p['id'] for p in found}
+            found = found + [p for p in table.fuzzy(kw, limit=10, cc=cc) if p['id'] not in seen]
+        if reference_only:
+            for p in found:
+                p['_reference_only'] = True
+        add(found)
+        return len(found)
+    except Exception:
+        return 0  # local data problem must never break the OFF search
 
 
 def smart_search(query: str, settings: dict, history=None) -> tuple[list[dict], bool]:
@@ -198,11 +230,22 @@ def smart_search(query: str, settings: dict, history=None) -> tuple[list[dict], 
         smae = smae_client.search_by_name(smae_kw, page_size=20)
         add(smae)
         if len(smae) < 5:
-            add(fuzzy_smae(smae_kw, limit=10))
+            smae = smae + fuzzy_smae(smae_kw, limit=10)
+            add(smae)
+        if len(smae) < 3:  # generic foods SMAE lacks (USDA, public domain)
+            _add_table(add, 'usda', kw, cc, reference_only=food_tables.is_reference_only('usda', cc))
+    else:
+        # the country's official table first (UK CoFID, FR CIQUAL, US USDA); USDA values
+        # are only a "reference" for everyone else
+        own = food_tables.table_for_country(cc)
+        n_own = _add_table(add, own, kw, cc, reference_only=food_tables.is_reference_only(own, cc))
+        if own != 'usda' and n_own < 3:
+            _add_table(add, 'usda', kw, cc, reference_only=food_tables.is_reference_only('usda', cc))
     off_failed = False
     try:
         from src import api_client
-        add(api_client.search_by_name(kw, page_size=20, country_code=cc))
+        tags = cs.get('tags') if isinstance(cs, dict) else None
+        add(api_client.search_by_name(kw, page_size=20, country_code=cc, country_tags=tags or None))
     except Exception:
         off_failed = True
 

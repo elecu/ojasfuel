@@ -193,6 +193,9 @@ _EN = {
     'disclaimer': 'This app is not affiliated with Open Food Facts.',
     'disclaimer_mx': 'This app is not affiliated with SMAE or Open Food Facts.',
     'off_credit': '© Open Food Facts contributors',
+    'usda_credit': 'U.S. Department of Agriculture, Agricultural Research Service. FoodData Central, SR Legacy (2018). fdc.nal.usda.gov — public domain.',
+    'cofid_credit': "Public Health England (2021). McCance and Widdowson's The Composition of Foods Integrated Dataset 2021. Contains public sector information licensed under the Open Government Licence v3.0.",
+    'ciqual_credit': 'Anses (2020). Ciqual French food composition table. ciqual.anses.fr — Licence Ouverte / CC-BY 4.0.',
     'smae_credit': '© SMAE — Instituto Nacional de Ciencias Médicas y Nutrición Salvador Zubirán',
     'support_text': 'Is OjasFuel useful to you? Support the project!',
     'support_btn': '☕ Buy me a protein shake',
@@ -372,6 +375,20 @@ _EN = {
     # pages (detail/portions/equivalents/home)
     'diet_source_off': 'Verified by Open Food Facts',
     'diet_source_smae': 'Mexican SMAE food database',
+    'diet_source_usda': 'USDA FoodData Central (generic food)',
+    'usda_info': 'USDA information',
+    'usda_category': 'Category',
+    'usda_portion': 'Reference portion',
+    'usda_source': 'Source: USDA FoodData Central',
+    'diet_source_cofid': 'UK CoFID (McCance & Widdowson)',
+    'diet_source_ciqual': 'ANSES-CIQUAL (France)',
+    'table_info': 'Food composition table',
+    'table_category': 'Category',
+    'table_portion': 'Reference portion',
+    'table_source_usda': 'Source: USDA FoodData Central (SR Legacy)',
+    'table_source_cofid': "Source: UK CoFID 2021 (McCance and Widdowson's)",
+    'table_source_ciqual': 'Source: ANSES-CIQUAL 2020 (France)',
+    'table_reference_only': 'US reference values (no official table for your country in OjasFuel)',
     'diet_source_ingredients': 'Estimated from ingredients',
     'diet_source_none': 'No diet data',
     'check_allergies_detail': 'Ingredients unavailable: open the detail page to check allergens.',
@@ -695,6 +712,9 @@ _ES = {
     'disclaimer': 'Esta aplicación no está afiliada con Open Food Facts.',
     'disclaimer_mx': 'Esta aplicación no está afiliada con el SMAE ni con Open Food Facts.',
     'off_credit': '© Contribuidores de Open Food Facts',
+    'usda_credit': 'Departamento de Agricultura de EE. UU., Servicio de Investigación Agrícola. FoodData Central, SR Legacy (2018). fdc.nal.usda.gov — dominio público.',
+    'cofid_credit': "Public Health England (2021). McCance and Widdowson's The Composition of Foods Integrated Dataset 2021. Contiene información del sector público con licencia Open Government Licence v3.0.",
+    'ciqual_credit': 'Anses (2020). Table de composition nutritionnelle des aliments Ciqual. ciqual.anses.fr — Licence Ouverte / CC-BY 4.0.',
     'smae_credit': '© SMAE — Instituto Nacional de Ciencias Médicas y Nutrición Salvador Zubirán',
     'support_text': '¿Te está siendo útil OjasFuel? Puedes apoyar el proyecto con un cafecito ☕',
     'support_btn': '☕ Buy me a coffee',
@@ -874,6 +894,20 @@ _ES = {
     # pages (detail/portions/equivalents/home)
     'diet_source_off': 'Verificado por Open Food Facts',
     'diet_source_smae': 'Base de datos SMAE (México)',
+    'diet_source_usda': 'USDA FoodData Central (alimento genérico)',
+    'usda_info': 'Información USDA',
+    'usda_category': 'Categoría',
+    'usda_portion': 'Porción de referencia',
+    'usda_source': 'Fuente: USDA FoodData Central',
+    'diet_source_cofid': 'UK CoFID (McCance & Widdowson)',
+    'diet_source_ciqual': 'ANSES-CIQUAL (Francia)',
+    'table_info': 'Tabla de composición de alimentos',
+    'table_category': 'Categoría',
+    'table_portion': 'Porción de referencia',
+    'table_source_usda': 'Fuente: USDA FoodData Central (SR Legacy)',
+    'table_source_cofid': "Fuente: UK CoFID 2021 (McCance and Widdowson's)",
+    'table_source_ciqual': 'Fuente: ANSES-CIQUAL 2020 (Francia)',
+    'table_reference_only': 'Valores de referencia de EE. UU. (sin tabla oficial para tu país en OjasFuel)',
     'diet_source_ingredients': 'Estimado a partir de los ingredientes',
     'diet_source_none': 'Sin datos de dieta',
     'check_allergies_detail': 'Ingredientes no disponibles: abre el detalle para revisar alérgenos.',
@@ -1117,6 +1151,20 @@ def _valid_setting(key: str, value) -> bool:
     return True
 
 
+def _normalize_countries(s: dict) -> None:
+    """Old saves stored countries as a plain list of tags; pages expect {tags, cc}."""
+    c = s.get('countries')
+    if isinstance(c, list):
+        try:
+            from src.api_client import country_tags_to_cc
+            cc = country_tags_to_cc(c) if len(c) == 1 else None
+        except Exception:
+            cc = None
+        s['countries'] = {'tags': list(c), 'cc': cc}
+    elif not isinstance(c, dict):
+        s['countries'] = {'tags': [], 'cc': None}
+
+
 def init_session() -> None:
     """Initialise session_state with defaults, then overlay browser localStorage once."""
     if 'settings' not in st.session_state:
@@ -1126,6 +1174,7 @@ def init_session() -> None:
             st.session_state['settings'].setdefault(k, copy.deepcopy(v))
     s = st.session_state['settings']
     apply_veg_variant(s)
+    _normalize_countries(s)
 
     try:
         from src.storage import (read_localstorage, save_to_localstorage,
@@ -1142,6 +1191,7 @@ def init_session() -> None:
             if ready:
                 if saved:
                     _merge_saved(saved)
+                    _normalize_countries(st.session_state['settings'])
                     if 'onboarded' not in saved:
                         s['onboarded'] = True  # existing user: never show onboarding
                 st.session_state['_ls_loaded'] = True

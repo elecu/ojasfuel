@@ -62,6 +62,8 @@ def diet_source_label(source: str) -> str:
         return t('diet_source_off')
     if source == 'smae':
         return t('diet_source_smae')
+    if source in ('usda', 'cofid', 'ciqual'):
+        return t(f'diet_source_{source}')
     if source == 'ingredients':
         return t('diet_source_ingredients')
     return t('diet_source_none')

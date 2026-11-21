@@ -1,6 +1,7 @@
 """Diet resolution and result filtering shared by list, detail and equivalents pages."""
 
 from src.classifier import ProductClassifier
+from src.food_tables import TABLE_SOURCES
 
 _classifier = ProductClassifier()
 
@@ -24,7 +25,7 @@ def ingredients_verifiable(product: dict) -> bool:
     Garbage OCR text or a nutrition table pasted as ingredients still "has
     ingredients", but matching allergens against it proves nothing.
     """
-    if product.get('_source') == 'smae':
+    if product.get('_source') in TABLE_SOURCES:
         return True
     if not (product.get('ingredients') or '').strip():
         return False
@@ -40,7 +41,7 @@ def ingredients_verifiable(product: dict) -> bool:
 def resolve_diet(product: dict, settings: dict) -> dict:
     """Resolve vegan/vegetarian status. Priority: OFF/SMAE tags > regex classifier.
 
-    Returns {'is_vegan', 'is_vegetarian', 'source': 'off'|'smae'|'ingredients'|'none',
+    Returns {'is_vegan', 'is_vegetarian', 'source': 'off'|'smae'|'usda'|'cofid'|'ciqual'|'ingredients'|'none',
              'classification': <classifier result>}.
     """
     cl = _classifier.classify(classification_text(product), settings or {},
@@ -48,8 +49,9 @@ def resolve_diet(product: dict, settings: dict) -> dict:
     tags = product.get('_off_tags') or {}
     t_vegan, t_veg = tags.get('is_vegan'), tags.get('is_vegetarian')
 
-    if t_vegan is not None or t_veg is not None:
-        source = 'smae' if product.get('_source') == 'smae' else 'off'
+    if t_vegan is not None or t_veg is not None or tags.get('vegan_uncertain') \
+            or tags.get('vegetarian_uncertain'):  # table says "cannot tell": never ok
+        source = product.get('_source') if product.get('_source') in TABLE_SOURCES else 'off'
         is_vegetarian = t_veg if t_veg is not None else cl.get('is_vegetarian')
         is_vegan = t_vegan if t_vegan is not None else cl.get('is_vegan')
         # Gap-filling from the regex classifier must not override OFF's own doubt

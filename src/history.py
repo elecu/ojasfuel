@@ -21,7 +21,8 @@ _SNAPSHOT_KEYS = (
     'id', 'name', 'brand', 'image_url', 'url', 'ingredients', 'nutrition',
     'labels', 'categories', 'categories_tags', 'quantity', 'serving_size',
     'nutriscore', 'countries_tags', '_off_tags', '_source', '_smae_portion_g',
-    '_smae_group', '_smae_subgroup', '_per_portion',
+    '_smae_group', '_smae_subgroup', '_per_portion', '_usda_portion_g', '_usda_category',
+    '_table_category', '_table_subgroup', '_table_portion_g', '_name_lang', '_reference_only',
     '_ingredients_tags_text', '_ingr_parsed_n', '_ingr_unknown_n', 'allergens_tags', 'traces_tags',
 )
 

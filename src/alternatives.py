@@ -2,6 +2,7 @@
 
 import time
 
+from src.food_tables import GENERIC_SOURCES, TABLE_SOURCES
 from src.verdict import verdict
 
 # ── Match priority config ─────────────────────────────────────────────────────
@@ -96,7 +97,64 @@ def category_overlap(a: dict, b: dict) -> float:
 
 
 def _brand_key(p: dict) -> str:
+    if p.get('_source') in GENERIC_SOURCES:  # one brand for all: diversify by food type instead
+        return (p.get('name') or '').split(',')[0].strip().lower()
     return ((p.get('brand') or '').split(',')[0]).strip().lower()
+
+
+# ── Preparation state (cooked / raw / dry ...) ───────────────────────────────
+# Cooked rice should be replaced by cooked pasta, not by dry pasta (its kcal per
+# 100 g are 3x higher, so the "equivalent" grams would be meaningless).
+_STATE_WORDS = {
+    'cooked': ('cooked', 'boiled', 'baked', 'roasted', 'steamed', 'fried', 'grilled',
+               'broiled', 'stewed', 'simmered', 'prepared', 'cocido', 'cocida', 'cocidos',
+               'cocidas', 'hervido', 'hervida', 'hervidos', 'hervidas', 'horneado',
+               'horneada', 'asado', 'asada', 'frito', 'frita', 'al vapor', 'guisado', 'guisada',
+               'microwaved', 'poached', 'braised',
+               # French (CIQUAL)
+               'cuit', 'cuite', 'cuits', 'cuites', 'bouilli', 'bouillie', 'bouillis',
+               'bouillies', 'au four', 'roti', 'rotie', 'rotis', 'roties', 'a la vapeur',
+               'cuit vapeur', 'poele', 'poelee', 'saute', 'sautee', 'grille', 'grillee',
+               'braise', 'braisee', 'frit', 'frite', 'frites', 'pochee', 'poche', 'mijote'),
+    'raw': ('raw', 'uncooked', 'fresh', 'crudo', 'cruda', 'crudos', 'crudas', 'fresco', 'fresca',
+            'cru', 'crue', 'crus', 'crues', 'frais', 'fraiche', 'fraiches'),
+    'dry': ('dry', 'dried', 'dehydrated', 'seco', 'seca', 'secos', 'secas', 'deshidratado',
+            'sec', 'seche', 'secs', 'seches', 'deshydrate', 'deshydratee'),
+    'canned': ('canned', 'enlatado', 'enlatada', 'enlatados', 'enlatadas', 'tinned',
+               'en conserve', 'appertise', 'appertisee', 'appertises', 'appertisees'),
+    'frozen': ('frozen', 'congelado', 'congelada', 'congelados', 'congeladas',
+               'surgele', 'surgelee', 'surgeles', 'surgelees'),
+}
+
+
+def prep_state(name: str) -> str | None:
+    """Preparation state class of a food name ('cooked', 'raw', 'dry', ...) or None."""
+    import re
+    import unicodedata
+    low = unicodedata.normalize('NFKD', (name or '').lower())
+    low = ''.join(c for c in low if not unicodedata.combining(c))
+    found = []
+    for state, words in _STATE_WORDS.items():
+        for w in words:
+            m = re.search(r'\b' + re.escape(w) + r'\b', low)
+            if m:
+                found.append((m.start(), state))
+    # "unprepared" (frozen fries, dry mixes) is never cooked; otherwise cooked wins
+    # over other words ("pasta, fresh-refrigerated, cooked")
+    if 'unprepared' in low:
+        found = [f for f in found if f[1] != 'cooked']
+    if not found:
+        return None
+    if any(st == 'cooked' for _, st in found):
+        return 'cooked'
+    return min(found)[1]
+
+
+def _apply_state_levels(orig: dict, items: list[dict], base: int) -> None:
+    """Same preparation state at `base`, others at `base` + 2 (after the next scope)."""
+    st = prep_state(orig.get('name'))
+    for c in items:
+        c['_level'] = base if (st is None or prep_state(c.get('name')) == st) else base + 2
 
 
 def smae_by_group(group: str, limit: int = 60, subgroup=None) -> list[dict]:
@@ -155,7 +213,7 @@ def _enrich(cands: list[dict], lookup_fn) -> None:
     """
     from concurrent.futures import ThreadPoolExecutor
     todo = [(i, c) for i, c in enumerate(cands)
-            if not c.get('ingredients') and c.get('_source') != 'smae' and c.get('id')]
+            if not c.get('ingredients') and c.get('_source') not in TABLE_SOURCES and c.get('id')]
     if not todo:
         return
 
@@ -229,10 +287,29 @@ def _collect_candidates(product, settings, search_fn, n) -> list[dict]:
         grp, sub = product['_smae_group'], product.get('_smae_subgroup')
         for lvl, items in enumerate((smae_by_group(grp, subgroup=sub) if sub else [],
                                      smae_by_group(grp))):
-            for c in items:
-                c['_level'] = lvl
-                out.append(c)
+            _apply_state_levels(product, items, lvl)
+            out.extend(items)
         return out, False
+
+    if product.get('_source') in GENERIC_SOURCES and product.get('_table_category'):
+        from src import food_tables
+        table = food_tables.get_table(product['_source'])
+        cat, sub = product['_table_category'], product.get('_table_subgroup')
+        lang = product.get('_name_lang', 'en')
+        # variants that only differ by "with/without salt" etc. are not alternatives
+        sig = lambda p: tuple((p.get('nutrition') or {}).get(k) for k in
+                              ('Energy (kcal)', 'Protein (g)', 'Fat (g)', 'Carbohydrates (g)'))
+        items = [c for c in table.by_category(cat, limit=3000, lang=lang) if sig(c) != sig(product)]
+        if sub:  # same subgroup first (level 0/2), then the whole group (level 1/3)
+            same = [c for c in items if c.get('_table_subgroup') == sub]
+            rest = [c for c in items if c.get('_table_subgroup') != sub]
+            _apply_state_levels(product, same, 0)
+            _apply_state_levels(product, rest, 1)
+            return same + rest, False
+        _apply_state_levels(product, items, 0)
+        for c in items:  # other states: level 1 (no sub-scope for USDA)
+            c['_level'] = min(c['_level'], 1)
+        return items, False
 
     cats = specific_categories(product)
 
