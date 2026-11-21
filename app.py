@@ -566,7 +566,7 @@ with col_search:
 
 # Quick chips: recent searches first, then common foods
 _chips: list[str] = []
-for _q in history.get_searches(4) + common_foods(get_lang()):
+for _q in history.get_searches(4) + common_foods(get_lang(), ((lambda c: c.get('cc') if isinstance(c, dict) else None)(st.session_state['settings'].get('countries')))):
     if _q and _normalize(_q) not in {_normalize(c) for c in _chips}:
         _chips.append(_q)
     if len(_chips) >= 10:

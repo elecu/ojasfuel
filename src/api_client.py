@@ -4,6 +4,7 @@ Mirrors the patterns from test_search.py.
 """
 
 import functools
+import re
 import os
 import requests
 import openfoodfacts
@@ -248,7 +249,30 @@ def _format_search_hit(hit: dict) -> dict:
     return product
 
 
-def search_by_name(query: str, page_size: int = 20, country_code: str | None = None) -> list[dict]:
+_LUCENE_SPECIAL = re.compile(r'[+\-!(){}\[\]^"~*?:\\/]|&&|\|\|')
+
+
+def name_query(query: str, country_tags: list | None = None) -> str:
+    """Free-text query restricted to countries via exact tags.
+
+    The search API ignores a `cc` parameter (it returned world-wide hits that a
+    client-side country filter then mostly discarded, e.g. 'pasta' in the UK
+    gave 0 results), so the country goes into the query itself.
+    """
+    text = _LUCENE_SPECIAL.sub(' ', query or '').strip()
+    text = re.sub(r'\b(AND|OR|NOT)\b', lambda m: m.group(0).lower(), text)
+    if not country_tags:
+        return text
+    countries = ' OR '.join(f'countries_tags:{_quote_tag(c)}' for c in country_tags)
+    # NB: the search API returns 0 hits for "(text) AND ..." and for
+    # "word1 word2 AND ..." (implicit operator binds oddly), so every term is
+    # joined with an explicit AND and only the country group is parenthesised.
+    terms = ' AND '.join(text.split())
+    return f'{terms} AND ({countries})' if terms else f'({countries})'
+
+
+def search_by_name(query: str, page_size: int = 20, country_code: str | None = None,
+                   country_tags: list | None = None) -> list[dict]:
     """
     Search Open Food Facts by product name.
     country_code: 2-letter ISO code (e.g. 'mx', 'es') — uses country subdomain for better local coverage.
@@ -256,9 +280,10 @@ def search_by_name(query: str, page_size: int = 20, country_code: str | None = N
     Fallback: openfoodfacts SDK on country-specific subdomain
     """
     last_error = None
-    params = {'q': query, 'page_size': page_size, 'fields': _SEARCH_FIELDS}
-    if country_code:
-        params['cc'] = country_code  # honoured by search API when supported
+    if country_tags is None and country_code:
+        country_tags = [t for t, cc in _CC_MAP.items() if cc == country_code]
+    params = {'q': name_query(query, country_tags), 'page_size': page_size,
+              'fields': _SEARCH_FIELDS}
 
     # Primary: modern search API
     for attempt in range(2):
@@ -276,12 +301,17 @@ def search_by_name(query: str, page_size: int = 20, country_code: str | None = N
         except Exception as e:
             last_error = e
 
-    # Fallback: country-specific SDK instance (uses [cc].openfoodfacts.org)
+    # Fallback: country-specific SDK instance (uses [cc].openfoodfacts.org).
+    # text_search ignores the country, so results are post-filtered by
+    # countries_tags; without a country restriction it is used as-is.
     try:
         api_instance = _get_api(country_code)
-        results = api_instance.product.text_search(query, page_size=page_size)
+        results = api_instance.product.text_search(query, page_size=max(page_size, 50) if country_tags else page_size)
         products = results.get('products', [])
-        return [format_product(p) for p in products]
+        if country_tags:
+            wanted = set(country_tags)
+            products = [p for p in products if wanted & set(p.get('countries_tags') or [])]
+        return [format_product(p) for p in products[:page_size]]
     except Exception as e:
         last_error = e
 

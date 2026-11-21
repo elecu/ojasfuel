@@ -104,7 +104,7 @@ with st.container(border=True):
             q = st.text_input(t('replace_search_orig'), placeholder=t('replace_search_orig_ph'),
                               key=_wk('orig_q'))
             submitted = st.form_submit_button(t('search_button'))
-        chips = common_foods(get_lang())[:10]
+        chips = common_foods(get_lang(), ((lambda c: c.get('cc') if isinstance(c, dict) else None)(st.session_state['settings'].get('countries'))))[:10]
         if chips:
             st.pills(t('quick_search'), options=chips, selection_mode='single', key=_wk('chip'),
                      on_change=_chip_picked, label_visibility='collapsed')

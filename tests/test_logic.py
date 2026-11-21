@@ -282,3 +282,55 @@ def test_alternatives_report_incomplete_on_network_failure():
     assert alts == [] and incomplete is True
     alts, incomplete = find_alternatives_ex(orig, {'mode': 'vegan'}, search_fn=lambda *a: [])
     assert alts == [] and incomplete is False
+
+
+def test_name_query_filters_country_and_escapes_syntax():
+    from src.api_client import name_query
+    assert name_query('pasta', ['en:united-kingdom']) == 'pasta AND (countries_tags:"en:united-kingdom")'
+    assert name_query('whole grain pasta', ['en:united-kingdom', 'en:ireland']) == (
+        'whole AND grain AND pasta AND (countries_tags:"en:united-kingdom" OR countries_tags:"en:ireland")')
+    assert name_query('pasta') == 'pasta'
+    q = name_query('pan: "integral" AND (x)', None)
+    assert ':' not in q and '"' not in q and 'AND' not in q
+
+
+def test_search_by_name_raises_when_both_endpoints_fail(monkeypatch):
+    import pytest
+    from src import api_client
+
+    def boom(*a, **k):
+        raise ConnectionError('down')
+    monkeypatch.setattr(api_client.requests, 'get', boom)
+
+    class FakeApi:
+        class product:
+            text_search = staticmethod(boom)
+    monkeypatch.setattr(api_client, '_get_api', lambda cc: FakeApi)
+    with pytest.raises(RuntimeError):
+        api_client.search_by_name('pasta', country_tags=['en:united-kingdom'])
+
+
+def test_search_by_name_fallback_honours_country(monkeypatch):
+    from src import api_client
+
+    def boom(*a, **k):
+        raise ConnectionError('down')
+    monkeypatch.setattr(api_client.requests, 'get', boom)
+
+    class FakeApi:
+        class product:
+            @staticmethod
+            def text_search(q, page_size=20):
+                return {'products': [
+                    {'code': '1', 'product_name': 'uk pasta', 'countries_tags': ['en:united-kingdom']},
+                    {'code': '2', 'product_name': 'fr pasta', 'countries_tags': ['en:france']}]}
+    monkeypatch.setattr(api_client, '_get_api', lambda cc: FakeApi)
+    res = api_client.search_by_name('pasta', country_tags=['en:united-kingdom'])
+    assert len(res) == 1 and res[0]['name'] == 'uk pasta'
+
+
+def test_common_foods_follow_country():
+    import src.search_smart as ss
+    assert 'nopal' in ss.common_foods('es', 'mx')
+    assert 'nopal' not in ss.common_foods('es', 'es') and 'patata cocida' in ss.common_foods('es', 'es')
+    assert 'baked beans' in ss.common_foods('en', 'gb')
